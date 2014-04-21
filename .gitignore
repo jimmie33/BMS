@@ -41,6 +41,11 @@ local.properties
 *.user
 *.sln.docstates
 
+# solution and project files
+*.sln
+*.vcxproj
+*.filters
+
 # Build results
 
 [Dd]ebug/
