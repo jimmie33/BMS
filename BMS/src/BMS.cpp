@@ -49,18 +49,19 @@ BMS::BMS(const Mat& src, const int dw1, const int ow, const bool nm, const bool 
 		_feature_maps.push_back(sp[1]);
 		_feature_maps.push_back(sp[2]);
 	}
-	_sm=Mat::zeros(src.size(),CV_64FC1);
+	_sm=Mat::zeros(src.size(),CV_32FC1);
 }
 
 void BMS::computeSaliency(float step)
 {
+	Mat bm;
 	for (int i=0;i<_feature_maps.size();++i)
 	{
 		double max_,min_;
 		minMaxLoc(_feature_maps[i],&min_,&max_);
 		for (float thresh=min_;thresh<max_;thresh+=step)
 		{
-			Mat bm=_feature_maps[i]>thresh;
+			bm=_feature_maps[i]>thresh;
 			registerPosition(bm);
 			bm=_feature_maps[i]<=thresh;
 			registerPosition(bm);
@@ -70,7 +71,7 @@ void BMS::computeSaliency(float step)
 
 Mat BMS::registerPosition(const Mat& bm)
 {
-	Mat bm_=bm.clone();
+	Mat bm_;
 	if (_opening_width>0)
 	{
 		dilate(bm,bm_,Mat(),Point(-1,-1),_opening_width);
@@ -126,13 +127,13 @@ Mat BMS::getAttentionMap(const Mat& bm)
 		}
 	}
 	
-	double max_, min_;
-	minMaxLoc(ret,&min_,&max_);
-	ret=ret != 1;
+	//double max_, min_;
+	//minMaxLoc(ret,&min_,&max_);
+	ret = ret != 1;
 	
 	if(_dilation_width_1>0)
 		dilate(ret,ret,Mat(),Point(-1,-1),_dilation_width_1);
-	ret.convertTo(ret,CV_64FC1);
+	ret.convertTo(ret,CV_32FC1);
 	if (_normalize)
 		normalize(ret,ret,1.0,0.0,NORM_L2);
 	else
