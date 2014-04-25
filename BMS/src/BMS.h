@@ -24,30 +24,35 @@
 #ifndef BMS_H
 #define BMS_H
 
+#ifdef IMDEBUG
+#include <imdebug.h>
+#endif
 #include <fstream>
 #include <vector>
-#include "opencv2/opencv.hpp"
+#include <opencv2/opencv.hpp>
 
-using namespace cv;
+
+
+static cv::RNG BMS_RNG;
 
 class BMS
 {
 public:
-	BMS (const Mat& src, const int dw1, const int ow, const bool nm, const bool hb);
-	Mat getSaliencyMap();
-	void computeSaliency(float step);
+	BMS (const cv::Mat& src, const int dw1, const int ow, const bool nm, const bool hb);
+	cv::Mat getSaliencyMap();
+	void computeSaliency(double step);
 private:
-	Mat registerPosition(const Mat& bm);
-	Mat getAttentionMap(const Mat& bm);
-	Mat _sm;
-	Mat _src;
-	vector<Mat> _feature_maps;
-	RNG _rng;
-	int _dilation_width_1;
-	int _opening_width;
-	bool _handle_border;
-	bool _normalize;
+	cv::Mat mSaliencyMap;
+	cv::Mat mSrc;
+	std::vector<cv::Mat> mFeatureMaps;
+	int mDilationWidth_1;
+	int mOpeningWidth;
+	bool mHandleBorder;
+	bool mNormalize;
+	cv::Mat getAttentionMap(const cv::Mat& bm, int dilation_width_1, bool toNormalize, bool handle_border);
+	void whitenFeatMap(float reg);
 };
+
 
 
 #endif

@@ -28,6 +28,8 @@
 #include "BMS.h"
 #include "fileGettor.h"
 
+#define MAX_IMG_DIM 400
+
 using namespace cv;
 using namespace std;
 
@@ -71,8 +73,11 @@ void doWork(
 		/* Preprocessing */
 		Mat src=imread(in_path+file_list[i]);
 		Mat src_small;
-		resize(src,src_small,Size(600,(int)(src.rows*(600.0/src.cols))),0.0,0.0,INTER_AREA);// standard: width: 600 pixel
+		float w = (float)src.cols, h = (float)src.rows;
+		float maxD = max(w,h);
+		resize(src,src_small,Size((int)(MAX_IMG_DIM*w/maxD),(int)(MAX_IMG_DIM*h/maxD)),0.0,0.0,INTER_AREA);// standard: width: 600 pixel
 		GaussianBlur(src_small,src_small,Size(3,3),1,1);// removing noise
+		cvtColor(src_small, src_small, CV_RGB2Lab);
 
 		/* Computing saliency */
 		ttt=clock();

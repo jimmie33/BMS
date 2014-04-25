@@ -32,11 +32,12 @@ using namespace std;
 
 
 BMS::BMS(const Mat& src, const int dw1, const int ow, const bool nm, const bool hb)
-	:_rng(),_dilation_width_1(dw1),_opening_width(ow),_normalize(nm),_handle_border(hb)
+	:mDilationWidth_1(dw1),mOpeningWidth(ow),mNormalize(nm),mHandleBorder(hb)
 {
-	_src=src.clone();
-	Mat lab;
-	cvtColor(_src,lab,CV_RGB2Lab);
+	mSrc=src.clone();
+	whitenFeatMap(10.0f);
+	/*Mat lab;
+	cvtColor(mSrc,lab,CV_RGB2Lab);
 
 	vector<Mat> maps;
 	maps.push_back(lab);
@@ -45,66 +46,54 @@ BMS::BMS(const Mat& src, const int dw1, const int ow, const bool nm, const bool 
 	{
 		vector<Mat> sp;
 		split(maps[i],sp);
-		_feature_maps.push_back(sp[0]);
-		_feature_maps.push_back(sp[1]);
-		_feature_maps.push_back(sp[2]);
-	}
-	_sm=Mat::zeros(src.size(),CV_32FC1);
+		mFeatureMaps.push_back(sp[0]);
+		mFeatureMaps.push_back(sp[1]);
+		mFeatureMaps.push_back(sp[2]);
+	}*/
+	mSaliencyMap=Mat::zeros(src.size(),CV_32FC1);
 }
 
-void BMS::computeSaliency(float step)
+void BMS::computeSaliency(double step)
 {
-	Mat bm;
-	for (int i=0;i<_feature_maps.size();++i)
+	for (int i=0;i<mFeatureMaps.size();++i)
 	{
+		Mat bm;
 		double max_,min_;
-		minMaxLoc(_feature_maps[i],&min_,&max_);
-		for (float thresh=min_;thresh<max_;thresh+=step)
+		minMaxLoc(mFeatureMaps[i],&min_,&max_);
+		step = (max_ - min_) / 30.0f;
+		for (double thresh=min_;thresh<max_;thresh+=step)
 		{
-			bm=_feature_maps[i]>thresh;
-			registerPosition(bm);
-			bm=_feature_maps[i]<=thresh;
-			registerPosition(bm);
+			bm=mFeatureMaps[i]>thresh;
+			Mat am = getAttentionMap(bm, mDilationWidth_1, mNormalize, mHandleBorder);
+			mSaliencyMap += am;
+			//bm=_feature_maps[i]<=thresh;
+			//registerPosition(bm);
 		}
 	}
 }
 
-Mat BMS::registerPosition(const Mat& bm)
-{
-	Mat bm_;
-	if (_opening_width>0)
-	{
-		dilate(bm,bm_,Mat(),Point(-1,-1),_opening_width);
-		erode(bm_,bm_,Mat(),Point(-1,-1),_opening_width);
-	}
-	
-	Mat innovation=getAttentionMap(bm_);
-	_sm=_sm+innovation;
-	return innovation;
-}
 
-
-Mat BMS::getAttentionMap(const Mat& bm)
+cv::Mat BMS::getAttentionMap(const cv::Mat& bm, int dilation_width_1, bool toNormalize, bool handle_border) 
 {
 	Mat ret=bm.clone();
 	int jump;
-	if (_handle_border)
+	if (handle_border)
 	{
 		for (int i=0;i<bm.rows;i++)
 		{
-			jump= _rng.uniform(0.0,1.0)>0.99 ? _rng.uniform(5,25):0;
+			jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
 			if (ret.at<char>(i,0+jump)!=1)
 				floodFill(ret,Point(0+jump,i),Scalar(1),0,Scalar(0),Scalar(0),8);
-			jump = _rng.uniform(0.0,1.0)>0.99 ?_rng.uniform(5,25):0;
+			jump = BMS_RNG.uniform(0.0,1.0)>0.99 ?BMS_RNG.uniform(5,25):0;
 			if (ret.at<char>(i,bm.cols-1-jump)!=1)
 				floodFill(ret,Point(bm.cols-1-jump,i),Scalar(1),0,Scalar(0),Scalar(0),8);
 		}
 		for (int j=0;j<bm.cols;j++)
 		{
-			jump= _rng.uniform(0.0,1.0)>0.99 ? _rng.uniform(5,25):0;
+			jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
 			if (ret.at<char>(0+jump,j)!=1)
 				floodFill(ret,Point(j,0+jump),Scalar(1),0,Scalar(0),Scalar(0),8);
-			jump= _rng.uniform(0.0,1.0)>0.99 ? _rng.uniform(5,25):0;
+			jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
 			if (ret.at<char>(bm.rows-1-jump,j)!=1)
 				floodFill(ret,Point(j,bm.rows-1-jump),Scalar(1),0,Scalar(0),Scalar(0),8);
 		}
@@ -131,10 +120,10 @@ Mat BMS::getAttentionMap(const Mat& bm)
 	//minMaxLoc(ret,&min_,&max_);
 	ret = ret != 1;
 	
-	if(_dilation_width_1>0)
-		dilate(ret,ret,Mat(),Point(-1,-1),_dilation_width_1);
+	if(dilation_width_1>0)
+		dilate(ret,ret,Mat(),Point(-1,-1),dilation_width_1);
 	ret.convertTo(ret,CV_32FC1);
-	if (_normalize)
+	if (toNormalize)
 		normalize(ret,ret,1.0,0.0,NORM_L2);
 	else
 		normalize(ret,ret,1.0,0.0,NORM_MINMAX);
@@ -144,7 +133,29 @@ Mat BMS::getAttentionMap(const Mat& bm)
 Mat BMS::getSaliencyMap()
 {
 	Mat ret; 
-	normalize(_sm,ret,255.0,0.0,NORM_MINMAX);
+	normalize(mSaliencyMap,ret,255.0,0.0,NORM_MINMAX);
 	ret.convertTo(ret,CV_8UC1);
 	return ret;
+}
+
+void BMS::whitenFeatMap(float reg)
+{
+	assert(mSrc.channels() == 3);
+	
+	Mat srcF,meanF,covF;
+	mSrc.convertTo(srcF, CV_64FC3);
+	Mat samples = srcF.reshape(1, mSrc.rows*mSrc.cols);
+	calcCovarMatrix(samples, covF, meanF, CV_COVAR_NORMAL | CV_COVAR_ROWS | CV_COVAR_SCALE);
+
+	covF += Mat::eye(covF.rows, covF.cols, CV_64FC1)*reg;
+	SVD svd(covF);
+	Mat sqrtW;
+	sqrt(svd.w,sqrtW);
+	Mat sqrtInvCovF = svd.u * Mat::diag(1.0/sqrtW);
+
+	srcF = srcF - Scalar(meanF.at<double>(0, 0), meanF.at<double>(0, 1), meanF.at<double>(0, 2));
+	Mat whitenedSrc = srcF.reshape(1, mSrc.rows*mSrc.cols)*sqrtInvCovF;
+	whitenedSrc = whitenedSrc.reshape(3, mSrc.rows);
+	//whitenedSrc.convertTo(whitenedSrc, CV_8U, 32.0, 127);
+	split(whitenedSrc, mFeatureMaps);
 }
