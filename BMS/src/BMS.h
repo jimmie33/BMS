@@ -43,6 +43,7 @@ public:
 	void computeSaliency(double step);
 private:
 	cv::Mat mSaliencyMap;
+	cv::Mat mBorderPriorMap;
 	cv::Mat mSrc;
 	std::vector<cv::Mat> mFeatureMaps;
 	int mDilationWidth_1;
@@ -51,6 +52,7 @@ private:
 	bool mNormalize;
 	cv::Mat getAttentionMap(const cv::Mat& bm, int dilation_width_1, bool toNormalize, bool handle_border);
 	void whitenFeatMap(float reg);
+	void computeBorderPriorMap(float reg, float marginRatio);
 };
 
 

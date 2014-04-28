@@ -61,7 +61,7 @@ void doWork(
 
 	clock_t ttt;
 	double avg_time=0;
-
+	//#pragma omp parallel for
 	for (int i=0;i<file_list.size();i++)
 	{
 		/* get file name */
@@ -76,14 +76,14 @@ void doWork(
 		float w = (float)src.cols, h = (float)src.rows;
 		float maxD = max(w,h);
 		resize(src,src_small,Size((int)(MAX_IMG_DIM*w/maxD),(int)(MAX_IMG_DIM*h/maxD)),0.0,0.0,INTER_AREA);// standard: width: 600 pixel
-		GaussianBlur(src_small,src_small,Size(3,3),1,1);// removing noise
-		cvtColor(src_small, src_small, CV_RGB2Lab);
+		//GaussianBlur(src_small,src_small,Size(7,7),2,2);// removing noise 1
+		//cvtColor(src_small, src_small, CV_RGB2Lab);
 
 		/* Computing saliency */
 		ttt=clock();
 
 		BMS bms(src_small,dilation_width_1,opening_width,use_normalize,handle_border);
-		bms.computeSaliency((float)sample_step);
+		bms.computeSaliency((double)sample_step);
 		
 		Mat result=bms.getSaliencyMap();
 
