@@ -132,7 +132,7 @@ cv::Mat BMS::getAttentionMap(const cv::Mat& bm, int dilation_width_1, bool toNor
 	if (toNormalize)
 		normalize(ret,ret,1.0,0.0,NORM_L2);
 	else
-		normalize(ret,ret,1.0,0.0,NORM_MINMAX);
+		normalize(ret,ret,0.0,1.0,NORM_MINMAX);
 	return ret;
 }
 
@@ -142,7 +142,7 @@ Mat BMS::getSaliencyMap()
 	/*normalize(mSaliencyMap, a, 1.0, 0.0, NORM_MINMAX);
 	normalize(mBorderPriorMap, b, 1.0, 0.0, NORM_MINMAX);
 	ret = a + 0.1*b;*/
-	normalize(mSaliencyMap, ret, 255.0, 0.0, NORM_MINMAX);
+	normalize(mSaliencyMap, ret, 0.0, 255.0, NORM_MINMAX);
 	ret.convertTo(ret,CV_8UC1);
 	return ret;
 }
