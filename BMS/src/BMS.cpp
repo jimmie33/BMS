@@ -32,11 +32,11 @@ using namespace std;
 
 
 BMS::BMS(const Mat& src, const int dw1, const int ow, const bool nm, const bool hb)
-	:mDilationWidth_1(dw1),mOpeningWidth(ow),mNormalize(nm),mHandleBorder(hb)
+:mDilationWidth_1(dw1), mOpeningWidth(ow), mNormalize(nm), mHandleBorder(hb), mAttMapCount(0)
 {
 	mSrc=src.clone();
 	mSaliencyMap = Mat::zeros(src.size(), CV_32FC1);
-	//mBorderPriorMap = Mat::zeros(src.size(), CV_64FC1);
+	mBorderPriorMap = Mat::zeros(src.size(), CV_32FC1);
 
 	whitenFeatMap(10.0f);
 	//computeBorderPriorMap(10.0f, 0.25);
@@ -70,6 +70,7 @@ void BMS::computeSaliency(double step)
 			bm=mFeatureMaps[i]>thresh;
 			Mat am = getAttentionMap(bm, mDilationWidth_1, mNormalize, mHandleBorder);
 			mSaliencyMap += am;
+			mAttMapCount++;
 			//bm=_feature_maps[i]<=thresh;
 			//registerPosition(bm);
 		}
@@ -127,6 +128,7 @@ cv::Mat BMS::getAttentionMap(const cv::Mat& bm, int dilation_width_1, bool toNor
 	if(dilation_width_1>0)
 		dilate(ret,ret,Mat(),Point(-1,-1),dilation_width_1);
 	ret.convertTo(ret,CV_32FC1);
+
 	if (toNormalize)
 		normalize(ret,ret,1.0,0.0,NORM_L2);
 	else
@@ -137,9 +139,9 @@ cv::Mat BMS::getAttentionMap(const cv::Mat& bm, int dilation_width_1, bool toNor
 Mat BMS::getSaliencyMap()
 {
 	Mat a,b,ret; 
-	/*normalize(mSaliencyMap, a, 1.0, 0.0, NORM_L2);
-	normalize(mBorderPriorMap, b, 1.0, 0.0, NORM_L2);
-	ret = a + b;*/
+	/*normalize(mSaliencyMap, a, 1.0, 0.0, NORM_MINMAX);
+	normalize(mBorderPriorMap, b, 1.0, 0.0, NORM_MINMAX);
+	ret = a + 0.1*b;*/
 	normalize(mSaliencyMap, ret, 255.0, 0.0, NORM_MINMAX);
 	ret.convertTo(ret,CV_8UC1);
 	return ret;
@@ -202,7 +204,10 @@ void BMS::computeBorderPriorMap(float reg, float marginRatio)
 		Mat srcFTemp = srcF - Scalar(meanF.at<double>(0, 0), meanF.at<double>(0, 1), meanF.at<double>(0, 2));
 		srcFTemp = srcFTemp.reshape(1, mSrc.rows*mSrc.cols);
 		Mat whitenedSrc = (srcFTemp*covF.inv()).mul(srcFTemp);
+		whitenedSrc.convertTo(whitenedSrc, CV_32FC1);
 		reduce(whitenedSrc, whitenedSrc, 1, CV_REDUCE_SUM);
-		mBorderPriorMap += whitenedSrc.reshape(1, mSrc.rows);
+		normalize(whitenedSrc.reshape(1, mSrc.rows), whitenedSrc, 1.0, 0.0, NORM_MINMAX);
+		mBorderPriorMap += whitenedSrc;
 	}
+	normalize(mBorderPriorMap, mBorderPriorMap, 1.0, 0.0, NORM_MINMAX);
 }

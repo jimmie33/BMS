@@ -35,8 +35,6 @@ public:
 			cout << "Error opening " << directory << endl;
 		}
 
-		readdir(dp);//.
-		readdir(dp);//..
 		while ((dirp = readdir(dp)) != NULL) {
 			string filename(dirp->d_name);
 			_name_list.push_back(filename);

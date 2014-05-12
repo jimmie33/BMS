@@ -43,6 +43,7 @@ public:
 	void computeSaliency(double step);
 private:
 	cv::Mat mSaliencyMap;
+	int mAttMapCount;
 	cv::Mat mBorderPriorMap;
 	cv::Mat mSrc;
 	std::vector<cv::Mat> mFeatureMaps;
