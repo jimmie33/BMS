@@ -39,7 +39,7 @@ Mat computeCWS(const Mat src,float reg, float marginRatio)
 	Mat srcF;
 	Mat ret(src.size(), CV_32FC1);
 
-	src.convertTo(srcF, CV_64FC3);
+	src.convertTo(srcF, CV_32FC3);
 	int rowMargin = (int)(marginRatio*src.rows);
 	int colMargin = (int)(marginRatio*src.cols);
 	
@@ -54,15 +54,21 @@ Mat computeCWS(const Mat src,float reg, float marginRatio)
 	{
 		Mat meanF, covF;
 		Mat samples = sampleVec[i].reshape(1, sampleVec[i].rows*sampleVec[i].cols);
-		calcCovarMatrix(samples, covF, meanF, CV_COVAR_NORMAL | CV_COVAR_ROWS | CV_COVAR_SCALE);
+		calcCovarMatrix(samples, covF, meanF, CV_COVAR_NORMAL | CV_COVAR_ROWS | CV_COVAR_SCALE, CV_32F);
 
-		covF += Mat::eye(covF.rows, covF.cols, CV_64FC1)*reg;
-		
+		covF += Mat::eye(covF.rows, covF.cols, CV_32FC1)*reg;
+		SVD svd(covF);
+		Mat sqrtW;
+		sqrt(svd.w, sqrtW);
+		Mat sqrtInvCovF = svd.u * Mat::diag(1.0 / sqrtW);
 
-		Mat srcFTemp = srcF - Scalar(meanF.at<double>(0, 0), meanF.at<double>(0, 1), meanF.at<double>(0, 2));
+		Mat srcFTemp = srcF - Scalar(meanF.at<float>(0, 0), meanF.at<float>(0, 1), meanF.at<float>(0, 2));
 		srcFTemp = srcFTemp.reshape(1, src.rows*src.cols);
-		Mat whitenedSrc = (srcFTemp*covF.inv()).mul(srcFTemp);
-		whitenedSrc.convertTo(whitenedSrc, CV_32FC1);
+		//Mat whitenedSrc = (srcFTemp*covF.inv()).mul(srcFTemp);
+		Mat whitenedSrc = srcFTemp*sqrtInvCovF;
+		whitenedSrc = abs(whitenedSrc);
+
+		//whitenedSrc.convertTo(whitenedSrc, CV_32FC1);
 		reduce(whitenedSrc, whitenedSrc, 1, CV_REDUCE_SUM);
 		whitenedSrc = whitenedSrc.reshape(1, src.rows);
 		sqrt(whitenedSrc, whitenedSrc);
@@ -81,6 +87,8 @@ Mat computeCWS(const Mat src,float reg, float marginRatio)
 
 	ret -= maxMap;
 
+	normalize(ret, ret, 0.0, 255.0, NORM_MINMAX);
+	ret.convertTo(ret, CV_8U);
 	return ret;
 }
 
@@ -157,6 +165,45 @@ IppStatus ippiRecErodeWrapper(const Mat& src, Mat& srcDst, int kernelWidth)
 	ippsFree(pBuff);
 	return status;
 }
+
+
+
+IppStatus ippiRecDilate8uWrapper(const Mat& src, Mat& srcDst, int kernelWidth)
+{
+	int step = (int)src.cols*sizeof(char), buffSize;
+	Ipp8u *pSrc = (Ipp8u*)src.data, *pSrcDst = (Ipp8u*)srcDst.data;
+	IppStatus status;
+	IppiSize roiSize = { src.cols, src.rows };
+	IppiSize maskSize = { kernelWidth, kernelWidth };
+	Ipp8u *pBuff = NULL;
+
+	status = ippiMorphReconstructGetBufferSize_8u_C1(roiSize, &buffSize);
+	if (status != ippStsNoErr) return status;
+
+	pBuff = ippsMalloc_8u(buffSize);
+	status = ippiMorphReconstructDilate_8u_C1IR(pSrc, step, pSrcDst, step, roiSize, (Ipp8u*)pBuff, ippiNormL1);
+
+	ippsFree(pBuff);
+	return status;
+}
+IppStatus ippiRecErode8uWrapper(const Mat& src, Mat& srcDst, int kernelWidth)
+{
+	int step = (int)src.cols*sizeof(char), buffSize;
+	Ipp8u *pSrc = (Ipp8u*)src.data, *pSrcDst = (Ipp8u*)srcDst.data;
+	IppStatus status;
+	IppiSize roiSize = { src.cols, src.rows };
+	IppiSize maskSize = { kernelWidth, kernelWidth };
+	Ipp8u *pBuff = NULL;
+
+	status = ippiMorphReconstructGetBufferSize_8u_C1(roiSize, &buffSize);
+	if (status != ippStsNoErr) return status;
+
+	pBuff = ippsMalloc_8u(buffSize);
+	status = ippiMorphReconstructErode_8u_C1IR(pSrc, step, pSrcDst, step, roiSize, (Ipp8u*)pBuff, ippiNormL1);
+
+	ippsFree(pBuff);
+	return status;
+}
 #endif
 
 void postProcessByRec(cv::Mat& salmap, int kernelWidth)
@@ -178,6 +225,29 @@ void postProcessByRec(cv::Mat& salmap, int kernelWidth)
 	dilate(temp, salmap, Mat(), Point(-1, -1), kernelWidth / 2);
 
 	status = ippiRecErodeWrapper(temp, salmap, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: ErosionRec: " << ippGetStatusString(status) << endl;
+#endif
+}
+
+void postProcessByRec8u(cv::Mat& salmap, int kernelWidth)
+{
+	assert(salmap.type() == CV_8UC1);
+#ifdef USE_IPP
+	Mat temp(salmap.size(), CV_8UC1);
+	IppStatus status;
+
+	/*status = ippiErode32fWrapper(salmap, temp, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: Erosion: " << ippGetStatusString(status) << endl;*/
+	erode(salmap, temp, Mat(), Point(-1, -1), kernelWidth / 2);
+
+	status = ippiRecDilate8uWrapper(salmap, temp, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: DilationRec: " << ippGetStatusString(status) << endl;
+
+	/*status = ippiDilate32fWrapper(temp, salmap, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: Dilation: " << ippGetStatusString(status) << endl;*/
+	dilate(temp, salmap, Mat(), Point(-1, -1), kernelWidth / 2);
+
+	status = ippiRecErode8uWrapper(temp, salmap, kernelWidth);
 	if (status != ippStsNoErr) cerr << "postProcessByRec: ErosionRec: " << ippGetStatusString(status) << endl;
 #endif
 }

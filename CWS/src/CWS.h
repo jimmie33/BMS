@@ -37,6 +37,7 @@
 
 cv::Mat computeCWS(const cv::Mat src, float reg, float marginRatio);
 void postProcessByRec(cv::Mat& salmap, int kernelWidth);
+void postProcessByRec8u(cv::Mat& salmap, int kernelWidth);
 
 
 

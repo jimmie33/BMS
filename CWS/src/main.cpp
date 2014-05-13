@@ -61,10 +61,10 @@ void doWork(
 
 		/* Post-processing */
 		if (openWidth > 0)
-			postProcessByRec(result, openWidth);
+			postProcessByRec8u(result, openWidth);
 
 		normalize(result, result, 0.0, 255.0, NORM_MINMAX);
-		result.convertTo(result, CV_8UC1);
+		//result.convertTo(result, CV_8UC1);
 
 		
 
