@@ -51,7 +51,7 @@ void doWork(
 		float w = (float)src.cols, h = (float)src.rows;
 		float maxD = max(w, h);
 		resize(src, src_small, Size((int)(MAX_IMG_DIM*w / maxD), (int)(MAX_IMG_DIM*h / maxD)), 0.0, 0.0, INTER_AREA);// standard: width: 600 pixel
-		GaussianBlur(src_small,src_small,Size(5,5),0.5,0.5);// removing noise 1
+		//GaussianBlur(src_small,src_small,Size(5,5),0.5,0.5);// removing noise 1
 
 		/* Computing saliency */
 		ttt = clock();
