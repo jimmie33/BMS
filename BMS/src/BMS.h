@@ -30,6 +30,9 @@
 #include <fstream>
 #include <vector>
 #include <opencv2/opencv.hpp>
+#ifdef USE_IPP
+#include <ipp.h>
+#endif
 
 
 
@@ -38,7 +41,7 @@ static cv::RNG BMS_RNG;
 class BMS
 {
 public:
-	BMS (const cv::Mat& src, const int dw1, const int ow, const bool nm, const bool hb);
+	BMS (const cv::Mat& src, int dw1, bool nm, bool hb);
 	cv::Mat getSaliencyMap();
 	void computeSaliency(double step);
 private:
@@ -48,13 +51,15 @@ private:
 	cv::Mat mSrc;
 	std::vector<cv::Mat> mFeatureMaps;
 	int mDilationWidth_1;
-	int mOpeningWidth;
 	bool mHandleBorder;
 	bool mNormalize;
 	cv::Mat getAttentionMap(const cv::Mat& bm, int dilation_width_1, bool toNormalize, bool handle_border);
 	void whitenFeatMap(float reg);
 	void computeBorderPriorMap(float reg, float marginRatio);
 };
+
+void postProcessByRec8u(cv::Mat& salmap, int kernelWidth);
+void postProcessByRec(cv::Mat& salmap, int kernelWidth);
 
 
 

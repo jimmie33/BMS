@@ -31,8 +31,8 @@ using namespace cv;
 using namespace std;
 
 
-BMS::BMS(const Mat& src, const int dw1, const int ow, const bool nm, const bool hb)
-:mDilationWidth_1(dw1), mOpeningWidth(ow), mNormalize(nm), mHandleBorder(hb), mAttMapCount(0)
+BMS::BMS(const Mat& src, int dw1, bool nm, bool hb)
+:mDilationWidth_1(dw1), mNormalize(nm), mHandleBorder(hb), mAttMapCount(0)
 {
 	mSrc=src.clone();
 	mSaliencyMap = Mat::zeros(src.size(), CV_32FC1);
@@ -210,4 +210,168 @@ void BMS::computeBorderPriorMap(float reg, float marginRatio)
 		mBorderPriorMap += whitenedSrc;
 	}
 	normalize(mBorderPriorMap, mBorderPriorMap, 1.0, 0.0, NORM_MINMAX);
+}
+
+#ifdef USE_IPP
+IppStatus ippiDilate32fWrapper(const Mat src, Mat& dst, int kernelWidth)
+{
+	int step = (int)src.cols*sizeof(float);
+	Ipp32f *pSrc = (Ipp32f*)src.data, *pDst = (Ipp32f*)dst.data;
+	IppStatus status;
+	IppiSize roiSize = { src.cols, src.rows };
+	IppiSize maskSize = { kernelWidth, kernelWidth };
+
+	Mat kernel = Mat::ones(kernelWidth, kernelWidth, CV_8UC1);
+	Ipp8u* pMask = kernel.data;
+	IppiPoint anchor = { kernelWidth / 2, kernelWidth / 2 };
+
+	status = ippiDilate_32f_C1R(pSrc, step, pDst, step, roiSize, pMask, maskSize, anchor);
+
+	return status;
+}
+
+IppStatus ippiErode32fWrapper(const Mat& src, Mat& dst, int kernelWidth)
+{
+	int step = (int)src.cols*sizeof(float);
+	Ipp32f *pSrc = (Ipp32f*)src.data, *pDst = (Ipp32f*)dst.data;
+	IppStatus status;
+	IppiSize roiSize = { src.cols, src.rows };
+	IppiSize maskSize = { kernelWidth, kernelWidth };
+
+	Mat kernel = Mat::ones(kernelWidth, kernelWidth, CV_8UC1);
+	Ipp8u* pMask = kernel.data;
+	IppiPoint anchor = { kernelWidth / 2, kernelWidth / 2 };
+
+	status = ippiErode_32f_C1R(pSrc, step, pDst, step, roiSize, pMask, maskSize, anchor);
+
+	cout << src.step << "," << dst.step << endl;
+
+	return status;
+}
+
+IppStatus ippiRecDilateWrapper(const Mat& src, Mat& srcDst, int kernelWidth)
+{
+	int step = (int)src.cols*sizeof(float), buffSize;
+	Ipp32f *pSrc = (Ipp32f*)src.data, *pSrcDst = (Ipp32f*)srcDst.data;
+	IppStatus status;
+	IppiSize roiSize = { src.cols, src.rows };
+	IppiSize maskSize = { kernelWidth, kernelWidth };
+	Ipp8u *pBuff = NULL;
+
+	status = ippiMorphReconstructGetBufferSize_32f_C1(roiSize, &buffSize);
+	if (status != ippStsNoErr) return status;
+
+	pBuff = ippsMalloc_8u(buffSize);
+	status = ippiMorphReconstructDilate_32f_C1IR(pSrc, step, pSrcDst, step, roiSize, (Ipp32f*)pBuff, ippiNormL1);
+
+	ippsFree(pBuff);
+	return status;
+}
+IppStatus ippiRecErodeWrapper(const Mat& src, Mat& srcDst, int kernelWidth)
+{
+	int step = (int)src.cols*sizeof(float), buffSize;
+	Ipp32f *pSrc = (Ipp32f*)src.data, *pSrcDst = (Ipp32f*)srcDst.data;
+	IppStatus status;
+	IppiSize roiSize = { src.cols, src.rows };
+	IppiSize maskSize = { kernelWidth, kernelWidth };
+	Ipp8u *pBuff = NULL;
+
+	status = ippiMorphReconstructGetBufferSize_32f_C1(roiSize, &buffSize);
+	if (status != ippStsNoErr) return status;
+
+	pBuff = ippsMalloc_8u(buffSize);
+	status = ippiMorphReconstructErode_32f_C1IR(pSrc, step, pSrcDst, step, roiSize, (Ipp32f*)pBuff, ippiNormL1);
+
+	ippsFree(pBuff);
+	return status;
+}
+
+
+
+IppStatus ippiRecDilate8uWrapper(const Mat& src, Mat& srcDst, int kernelWidth)
+{
+	int step = (int)src.cols*sizeof(char), buffSize;
+	Ipp8u *pSrc = (Ipp8u*)src.data, *pSrcDst = (Ipp8u*)srcDst.data;
+	IppStatus status;
+	IppiSize roiSize = { src.cols, src.rows };
+	IppiSize maskSize = { kernelWidth, kernelWidth };
+	Ipp8u *pBuff = NULL;
+
+	status = ippiMorphReconstructGetBufferSize_8u_C1(roiSize, &buffSize);
+	if (status != ippStsNoErr) return status;
+
+	pBuff = ippsMalloc_8u(buffSize);
+	status = ippiMorphReconstructDilate_8u_C1IR(pSrc, step, pSrcDst, step, roiSize, (Ipp8u*)pBuff, ippiNormL1);
+
+	ippsFree(pBuff);
+	return status;
+}
+IppStatus ippiRecErode8uWrapper(const Mat& src, Mat& srcDst, int kernelWidth)
+{
+	int step = (int)src.cols*sizeof(char), buffSize;
+	Ipp8u *pSrc = (Ipp8u*)src.data, *pSrcDst = (Ipp8u*)srcDst.data;
+	IppStatus status;
+	IppiSize roiSize = { src.cols, src.rows };
+	IppiSize maskSize = { kernelWidth, kernelWidth };
+	Ipp8u *pBuff = NULL;
+
+	status = ippiMorphReconstructGetBufferSize_8u_C1(roiSize, &buffSize);
+	if (status != ippStsNoErr) return status;
+
+	pBuff = ippsMalloc_8u(buffSize);
+	status = ippiMorphReconstructErode_8u_C1IR(pSrc, step, pSrcDst, step, roiSize, (Ipp8u*)pBuff, ippiNormL1);
+
+	ippsFree(pBuff);
+	return status;
+}
+#endif
+
+void postProcessByRec(cv::Mat& salmap, int kernelWidth)
+{
+	assert(salmap.type() == CV_32FC1);
+#ifdef USE_IPP
+	Mat temp(salmap.size(), CV_32FC1);
+	IppStatus status;
+
+	/*status = ippiErode32fWrapper(salmap, temp, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: Erosion: " << ippGetStatusString(status) << endl;*/
+	erode(salmap, temp, Mat(), Point(-1, -1), kernelWidth / 2);
+
+	status = ippiRecDilateWrapper(salmap, temp, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: DilationRec: " << ippGetStatusString(status) << endl;
+
+	/*status = ippiDilate32fWrapper(temp, salmap, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: Dilation: " << ippGetStatusString(status) << endl;*/
+	dilate(temp, salmap, Mat(), Point(-1, -1), kernelWidth / 2);
+
+	status = ippiRecErodeWrapper(temp, salmap, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: ErosionRec: " << ippGetStatusString(status) << endl;
+#else
+	cerr << "IPP Not enabled." << endl;
+#endif
+}
+
+void postProcessByRec8u(cv::Mat& salmap, int kernelWidth)
+{
+	assert(salmap.type() == CV_8UC1);
+#ifdef USE_IPP
+	Mat temp(salmap.size(), CV_8UC1);
+	IppStatus status;
+
+	/*status = ippiErode32fWrapper(salmap, temp, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: Erosion: " << ippGetStatusString(status) << endl;*/
+	erode(salmap, temp, Mat(), Point(-1, -1), kernelWidth / 2);
+
+	status = ippiRecDilate8uWrapper(salmap, temp, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: DilationRec: " << ippGetStatusString(status) << endl;
+
+	/*status = ippiDilate32fWrapper(temp, salmap, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: Dilation: " << ippGetStatusString(status) << endl;*/
+	dilate(temp, salmap, Mat(), Point(-1, -1), kernelWidth / 2);
+
+	status = ippiRecErode8uWrapper(temp, salmap, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: ErosionRec: " << ippGetStatusString(status) << endl;
+#else
+	cerr<<"IPP Not enabled."<<endl;
+#endif
 }

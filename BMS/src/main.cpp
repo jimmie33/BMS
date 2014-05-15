@@ -43,15 +43,15 @@ void help()
 
 
 void doWork(
-	const string in_path,
-	const string out_path,
-	const int sample_step,
-	const int opening_width,
-	const int dilation_width_1,
-	const int dilation_width_2,
-	const float blur_std,
-	const bool use_normalize,
-	const bool handle_border
+	const string& in_path,
+	const string& out_path,
+	int sample_step,
+	int recWidth,
+	int dilation_width_1,
+	int dilation_width_2,
+	float blur_std,
+	bool use_normalize,
+	bool handle_border
 	)
 {
 	if (in_path.compare(out_path)==0)
@@ -82,19 +82,26 @@ void doWork(
 		/* Computing saliency */
 		ttt=clock();
 
-		BMS bms(src_small,dilation_width_1,opening_width,use_normalize,handle_border);
+		BMS bms(src_small,dilation_width_1,use_normalize,handle_border);
 		bms.computeSaliency((double)sample_step);
 		
 		Mat result=bms.getSaliencyMap();
 
 		/* Post-processing */
-		if (dilation_width_2>0)
-			dilate(result,result,Mat(),Point(-1,-1),dilation_width_2);
-		if (blur_std > 0)
+		if (true) // flag for obj
 		{
-			int blur_width = (int)MIN(floor(blur_std)*4+1,51);
-			GaussianBlur(result,result,Size(blur_width,blur_width),blur_std,blur_std);
-		}			
+			if (dilation_width_2 > 0)
+				dilate(result, result, Mat(), Point(-1, -1), dilation_width_2);
+			if (blur_std > 0)
+			{
+				int blur_width = (int)MIN(floor(blur_std) * 4 + 1, 51);
+				GaussianBlur(result, result, Size(blur_width, blur_width), blur_std, blur_std);
+			}
+		}
+		else
+		{
+			postProcessByRec8u(result, recWidth);
+		}
 		
 		ttt=clock()-ttt;
 		float process_time=(float)ttt/CLOCKS_PER_SEC;
@@ -124,7 +131,7 @@ int main(int args, char** argv)
 
 	/*Note: we transform the kernel width to the equivalent iteration 
 	number for OpenCV's **dilate** and **erode** functions**/
-	int OPENING_WIDTH		=	(atoi(argv[4])-1)/2;//2: omega_o	
+	int REC_WIDTH		=	(atoi(argv[4])-1)/2;//2: omega_o	
 	int DILATION_WIDTH_1	=	(atoi(argv[5])-1)/2;//3: omega_d1
 	int DILATION_WIDTH_2	=	(atoi(argv[6])-1)/2;//11: omega_d2
 
@@ -133,7 +140,7 @@ int main(int args, char** argv)
 	bool HANDLE_BORDER		=	atoi(argv[9]);//0: to handle the images with artificial frames
 	
 
-	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,OPENING_WIDTH,DILATION_WIDTH_1,DILATION_WIDTH_2,BLUR_STD,NORMALIZE,HANDLE_BORDER);
+	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,REC_WIDTH,DILATION_WIDTH_1,DILATION_WIDTH_2,BLUR_STD,NORMALIZE,HANDLE_BORDER);
 
 	return 0;
 }
