@@ -36,7 +36,7 @@ using namespace std;
 void help()
 {
 	cout<<"Usage: \n"
-		<<"BMS <input_path> <output_path> <step_size> <dilation_width1> <dilation_width2> <blurring_std> <use_normalization> <handle_border>\n"
+		<<"BMSSOD <input_path> <output_path> <step_size> <postprocess_width>\n"
 		<<"Press ENTER to continue ..."<<endl;
 	getchar();
 }
@@ -46,11 +46,7 @@ void doWork(
 	const string& in_path,
 	const string& out_path,
 	int sample_step,
-	int dilation_width_1,
-	int dilation_width_2,
-	float blur_std,
-	bool use_normalize,
-	bool handle_border
+	int postprocess_width
 	)
 {
 	if (in_path.compare(out_path)==0)
@@ -75,29 +71,20 @@ void doWork(
 		float w = (float)src.cols, h = (float)src.rows;
 		float maxD = max(w,h);
 		resize(src,src_small,Size((int)(MAX_IMG_DIM*w/maxD),(int)(MAX_IMG_DIM*h/maxD)),0.0,0.0,INTER_AREA);// standard: width: 600 pixel
-		//GaussianBlur(src_small,src_small,Size(7,7),2,2);// removing noise 1
-		//cvtColor(src_small, src_small, CV_RGB2Lab);
+		cvtColor(src_small, src_small, CV_RGB2Lab);
 
 		/* Computing saliency */
 		ttt=clock();
 
-		BMS bms(src_small,dilation_width_1,use_normalize,handle_border);
+		BMS bms(src_small);
 		bms.computeSaliency((double)sample_step);
 		
 		Mat result=bms.getSaliencyMap();
 
 		/* Post-processing */
+		postProcessByRec8u(result, postprocess_width);
+		normalize(result, result, 0.0, 255.0, NORM_MINMAX);
 
-		if (dilation_width_2 > 0)
-			dilate(result, result, Mat(), Point(-1, -1), dilation_width_2);
-		if (blur_std > 0)
-		{
-			int blur_width = (int)MIN(floor(blur_std) * 4 + 1, 51);
-			GaussianBlur(result, result, Size(blur_width, blur_width), blur_std, blur_std);
-		}
-
-		
-		
 		ttt=clock()-ttt;
 		float process_time=(float)ttt/CLOCKS_PER_SEC;
 		avg_time+=process_time;
@@ -112,7 +99,7 @@ void doWork(
 
 int main(int args, char** argv)
 {
-	if (args != 9)
+	if (args != 5)
 	{
 		cout<<"wrong number of input arguments."<<endl;
 		help();
@@ -126,15 +113,10 @@ int main(int args, char** argv)
 
 	/*Note: we transform the kernel width to the equivalent iteration 
 	number for OpenCV's **dilate** and **erode** functions**/	
-	int DILATION_WIDTH_1	=	(atoi(argv[4])-1)/2;//3: omega_d1
-	int DILATION_WIDTH_2	=	(atoi(argv[5])-1)/2;//11: omega_d2
-
-	float BLUR_STD			=	(float)atof(argv[6]);//20: sigma	
-	bool NORMALIZE			=	atoi(argv[7]);//1: whether to use L2-normalization
-	bool HANDLE_BORDER		=	atoi(argv[8]);//0: to handle the images with artificial frames
+	int POSTPROCESS_WIDTH	=	atoi(argv[4]);//3: omega_d1
 	
 
-	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,DILATION_WIDTH_1,DILATION_WIDTH_2,BLUR_STD,NORMALIZE,HANDLE_BORDER);
+	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,POSTPROCESS_WIDTH);
 
 	return 0;
 }

@@ -31,9 +31,71 @@ using namespace cv;
 using namespace std;
 
 #define COV_MAT_REG 50.0f
+#define BORDER_MARGIN 30
 
-BMS::BMS(const Mat& src, int dw1, bool nm, bool hb)
-:mDilationWidth_1(dw1), mNormalize(nm), mHandleBorder(hb), mAttMapCount(0)
+Mat computeCWS(const Mat src, float reg, float marginRatio)
+{
+	assert(mSrc.channels() == 3);
+
+	vector<Mat> sampleVec(4);
+	Mat srcF;
+	Mat ret(src.size(), CV_32FC1);
+
+	src.convertTo(srcF, CV_32FC3);
+	int rowMargin = (int)(marginRatio*src.rows);
+	int colMargin = (int)(marginRatio*src.cols);
+
+	sampleVec[0] = Mat(srcF, Range(0, rowMargin)).clone();
+	sampleVec[1] = Mat(srcF, Range(src.rows - rowMargin, src.rows)).clone();
+	sampleVec[2] = Mat(srcF, Range::all(), Range(0, colMargin)).clone();
+	sampleVec[3] = Mat(srcF, Range::all(), Range(src.cols - colMargin, src.cols)).clone();
+
+	Mat maxMap(src.size(), CV_32FC1);
+
+	for (int i = 0; i < 4; i++)
+	{
+		Mat meanF, covF;
+		Mat samples = sampleVec[i].reshape(1, sampleVec[i].rows*sampleVec[i].cols);
+		calcCovarMatrix(samples, covF, meanF, CV_COVAR_NORMAL | CV_COVAR_ROWS | CV_COVAR_SCALE, CV_32F);
+
+		covF += Mat::eye(covF.rows, covF.cols, CV_32FC1)*reg;
+		SVD svd(covF);
+		Mat sqrtW;
+		sqrt(svd.w, sqrtW);
+		Mat sqrtInvCovF = svd.u * Mat::diag(1.0 / sqrtW);
+
+		Mat srcFTemp = srcF - Scalar(meanF.at<float>(0, 0), meanF.at<float>(0, 1), meanF.at<float>(0, 2));
+		srcFTemp = srcFTemp.reshape(1, src.rows*src.cols);
+		//Mat whitenedSrc = (srcFTemp*covF.inv()).mul(srcFTemp);
+		Mat whitenedSrc = srcFTemp*sqrtInvCovF;
+		whitenedSrc = abs(whitenedSrc);
+
+		//whitenedSrc.convertTo(whitenedSrc, CV_32FC1);
+		reduce(whitenedSrc, whitenedSrc, 1, CV_REDUCE_SUM);
+		whitenedSrc = whitenedSrc.reshape(1, src.rows);
+		sqrt(whitenedSrc, whitenedSrc);
+		normalize(whitenedSrc, whitenedSrc, 1.0, 0.0, NORM_MINMAX);
+		if (i == 1)
+			maxMap = max(ret, whitenedSrc);
+		else if (i > 1)
+			maxMap = max(maxMap, whitenedSrc);
+
+		if (i == 0)
+			ret = whitenedSrc;
+		else
+			ret += whitenedSrc;
+
+	}
+
+	ret -= maxMap;
+
+	normalize(ret, ret, 0.0, 1.0, NORM_MINMAX);
+	//ret.convertTo(ret, CV_8U);
+	return ret;
+}
+
+BMS::BMS(const Mat& src)
+:mAttMapCount(0)
 {
 	mSrc=src.clone();
 	mSaliencyMap = Mat::zeros(src.size(), CV_32FC1);
@@ -60,6 +122,7 @@ BMS::BMS(const Mat& src, int dw1, bool nm, bool hb)
 
 void BMS::computeSaliency(double step)
 {
+	Mat cws = computeCWS(mSrc, 50.0, 0.1);
 	for (int i=0;i<mFeatureMaps.size();++i)
 	{
 		Mat bm;
@@ -69,80 +132,94 @@ void BMS::computeSaliency(double step)
 		for (double thresh = 0; thresh < 255; thresh += step)
 		{
 			bm=mFeatureMaps[i]>thresh;
-			Mat am = getAttentionMap(bm, mDilationWidth_1, mNormalize, mHandleBorder);
+			Mat am = getAttentionMap(bm);
 			mSaliencyMap += am;
 			mAttMapCount++;
 			//bm=_feature_maps[i]<=thresh;
 			//registerPosition(bm);
 		}
 	}
+
+	normalize(mSaliencyMap, mSaliencyMap, 0.0, 1.0, NORM_MINMAX);
+	/*Mat intersection = cws.mul(mSaliencyMap);
+	normalize(intersection, intersection, 0.0, 1.0, NORM_MINMAX);*/
+	mSaliencyMap =  cws + mSaliencyMap;
 }
 
 
-cv::Mat BMS::getAttentionMap(const cv::Mat& bm, int dilation_width_1, bool toNormalize, bool handle_border) 
+cv::Mat BMS::getAttentionMap(const cv::Mat& bm) 
 {
-	Mat ret=bm.clone();
+	Mat ret = bm.clone();
+
 	int jump;
-	if (handle_border)
+
+	/*Scalar sumWhole = sum(bm);
+	Scalar sumCenter = sum(Mat(bm, 
+		Rect(Point(BORDER_MARGIN, BORDER_MARGIN), Point(bm.cols-BORDER_MARGIN-1, bm.rows-BORDER_MARGIN-1))));
+
+	double sumBorder = (sumWhole[0]-sumCenter[0])/255.0;
+	double areaBorder = bm.rows*bm.cols - (bm.rows - 2*BORDER_MARGIN)*(bm.cols - 2*BORDER_MARGIN);
+	double white = pow(sumBorder,2.0);
+	double black = pow(areaBorder - sumBorder,2.0);
+	double whiteValue = black > white ? (black / (white + black) - 0.5) * 1 + 1 : 1;
+	double blackValue = white > black ? (white / (white + black) - 0.5) * 1 + 1 : 1;*/
+
+	Point seed;
+	for (int i=0;i<bm.rows;i++)
 	{
-		for (int i=0;i<bm.rows;i++)
+		jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
+		seed = Point(0 + jump, i);
+		if (ret.at<uchar>(seed) != 1)
 		{
-			jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
-			if (ret.at<uchar>(i,0+jump)!=1)
-				floodFill(ret,Point(0+jump,i),Scalar(1),0,Scalar(0),Scalar(0),8);
-			jump = BMS_RNG.uniform(0.0,1.0)>0.99 ?BMS_RNG.uniform(5,25):0;
-			if (ret.at<uchar>(i,bm.cols-1-jump)!=1)
-				floodFill(ret,Point(bm.cols-1-jump,i),Scalar(1),0,Scalar(0),Scalar(0),8);
+			floodFill(ret, seed, Scalar(1.0), 0, Scalar(0), Scalar(0), 4);
 		}
-		for (int j=0;j<bm.cols;j++)
+		
+			
+		jump = BMS_RNG.uniform(0.0,1.0)>0.99 ?BMS_RNG.uniform(5,25):0;
+		seed = Point(bm.cols - 1 - jump, i);
+		if (ret.at<uchar>(seed) != 1)
 		{
-			jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
-			if (ret.at<uchar>(0+jump,j)!=1)
-				floodFill(ret,Point(j,0+jump),Scalar(1),0,Scalar(0),Scalar(0),8);
-			jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
-			if (ret.at<uchar>(bm.rows-1-jump,j)!=1)
-				floodFill(ret,Point(j,bm.rows-1-jump),Scalar(1),0,Scalar(0),Scalar(0),8);
+			floodFill(ret, seed, Scalar(1.0), 0, Scalar(0), Scalar(0), 4);
+		}
+		
+	}
+	for (int j=0;j<bm.cols;j++)
+	{
+		jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
+		seed = Point(j, 0 + jump);
+		if (ret.at<uchar>(seed) != 1)
+		{
+			floodFill(ret, seed, Scalar(1.0), 0, Scalar(0), Scalar(0), 4);
+		}
+		
+
+		jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
+		seed = Point(j, bm.rows - 1 - jump);
+		if (ret.at<uchar>(seed) != 1)
+		{
+			floodFill(ret, seed, Scalar(1.0), 0, Scalar(0), Scalar(0), 4);
 		}
 	}
-	else
-	{
-		for (int i=0;i<bm.rows;i++)
-		{
-			if (ret.at<uchar>(i,0)!=1)
-				floodFill(ret,Point(0,i),Scalar(1),0,Scalar(0),Scalar(0),8);
-			if (ret.at<uchar>(i,bm.cols-1)!=1)
-				floodFill(ret,Point(bm.cols-1,i),Scalar(1),0,Scalar(0),Scalar(0),8);
-		}
-		for (int j=0;j<bm.cols;j++)
-		{
-			if (ret.at<uchar>(0,j)!=1)
-				floodFill(ret,Point(j,0),Scalar(1),0,Scalar(0),Scalar(0),8);
-			if (ret.at<uchar>(bm.rows-1,j)!=1)
-				floodFill(ret,Point(j,bm.rows-1),Scalar(1),0,Scalar(0),Scalar(0),8);
-		}
-	}
+
+
 	
 	//double max_, min_;
 	//minMaxLoc(ret,&min_,&max_);
+	//ret.setTo(Scalar(255.0), ret == 0);
+	//imshow("bm", bm);
+	//imshow("display", ret);
+	//waitKey();
 	ret = ret != 1;
-	
-	if(dilation_width_1>0)
-		dilate(ret,ret,Mat(),Point(-1,-1),dilation_width_1);
+
 	ret.convertTo(ret,CV_32FC1);
 
-	if (toNormalize)
-		normalize(ret,ret,1.0,0.0,NORM_L2);
-	else
-		normalize(ret,ret,0.0,1.0,NORM_MINMAX);
 	return ret;
 }
 
 Mat BMS::getSaliencyMap()
 {
 	Mat a,b,ret; 
-	/*normalize(mSaliencyMap, a, 1.0, 0.0, NORM_MINMAX);
-	normalize(mBorderPriorMap, b, 1.0, 0.0, NORM_MINMAX);
-	ret = a + 0.1*b;*/
+
 	normalize(mSaliencyMap, ret, 0.0, 255.0, NORM_MINMAX);
 	ret.convertTo(ret,CV_8UC1);
 	return ret;
@@ -173,7 +250,7 @@ void BMS::whitenFeatMap(float reg)
 	{
 		normalize(mFeatureMaps[i], mFeatureMaps[i], 255.0, 0.0, NORM_MINMAX);
 		mFeatureMaps[i].convertTo(mFeatureMaps[i], CV_8U);
-		medianBlur(mFeatureMaps[i], mFeatureMaps[i], 3);
+		medianBlur(mFeatureMaps[i], mFeatureMaps[i], 5);
 	}
 }
 
