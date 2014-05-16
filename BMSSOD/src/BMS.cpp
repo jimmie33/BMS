@@ -149,10 +149,11 @@ void BMS::computeSaliency(double step)
 
 cv::Mat BMS::getAttentionMap(const cv::Mat& bm) 
 {
-	Mat ret=bm.clone();
+	Mat ret = bm.clone();
+
 	int jump;
 
-	Scalar sumWhole = sum(bm);
+	/*Scalar sumWhole = sum(bm);
 	Scalar sumCenter = sum(Mat(bm, 
 		Rect(Point(BORDER_MARGIN, BORDER_MARGIN), Point(bm.cols-BORDER_MARGIN-1, bm.rows-BORDER_MARGIN-1))));
 
@@ -161,39 +162,42 @@ cv::Mat BMS::getAttentionMap(const cv::Mat& bm)
 	double white = pow(sumBorder,2.0);
 	double black = pow(areaBorder - sumBorder,2.0);
 	double whiteValue = black > white ? (black / (white + black) - 0.5) * 1 + 1 : 1;
-	double blackValue = white > black ? (white / (white + black) - 0.5) * 1 + 1 : 1;
+	double blackValue = white > black ? (white / (white + black) - 0.5) * 1 + 1 : 1;*/
 
 	Point seed;
 	for (int i=0;i<bm.rows;i++)
 	{
 		jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
 		seed = Point(0 + jump, i);
-		if (ret.at<uchar>(seed) == 0 || ret.at<uchar>(seed) == 255)
+		if (ret.at<uchar>(seed) != 1)
 		{
-			floodFill(ret, seed, Scalar(ret.at<uchar>(seed) == 0 ? blackValue:whiteValue), 0, Scalar(0), Scalar(0), 4);
+			floodFill(ret, seed, Scalar(1.0), 0, Scalar(0), Scalar(0), 4);
 		}
+		
 			
 		jump = BMS_RNG.uniform(0.0,1.0)>0.99 ?BMS_RNG.uniform(5,25):0;
 		seed = Point(bm.cols - 1 - jump, i);
-		if (ret.at<uchar>(seed) == 0 || ret.at<uchar>(seed) == 255)
+		if (ret.at<uchar>(seed) != 1)
 		{
-			floodFill(ret, seed, Scalar(ret.at<uchar>(seed) == 0 ? blackValue : whiteValue), 0, Scalar(0), Scalar(0), 4);
+			floodFill(ret, seed, Scalar(1.0), 0, Scalar(0), Scalar(0), 4);
 		}
+		
 	}
 	for (int j=0;j<bm.cols;j++)
 	{
 		jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
 		seed = Point(j, 0 + jump);
-		if (ret.at<uchar>(seed) == 0 || ret.at<uchar>(seed) == 255)
+		if (ret.at<uchar>(seed) != 1)
 		{
-			floodFill(ret, seed, Scalar(ret.at<uchar>(seed) == 0 ? blackValue : whiteValue), 0, Scalar(0), Scalar(0), 4);
+			floodFill(ret, seed, Scalar(1.0), 0, Scalar(0), Scalar(0), 4);
 		}
+		
 
 		jump= BMS_RNG.uniform(0.0,1.0)>0.99 ? BMS_RNG.uniform(5,25):0;
 		seed = Point(j, bm.rows - 1 - jump);
-		if (ret.at<uchar>(seed) == 0 || ret.at<uchar>(seed) == 255)
+		if (ret.at<uchar>(seed) != 1)
 		{
-			floodFill(ret, seed, Scalar(ret.at<uchar>(seed) == 0 ? blackValue : whiteValue), 0, Scalar(0), Scalar(0), 4);
+			floodFill(ret, seed, Scalar(1.0), 0, Scalar(0), Scalar(0), 4);
 		}
 	}
 
@@ -201,10 +205,12 @@ cv::Mat BMS::getAttentionMap(const cv::Mat& bm)
 	
 	//double max_, min_;
 	//minMaxLoc(ret,&min_,&max_);
-	ret.setTo(Scalar(255.0), ret == 0);
+	//ret.setTo(Scalar(255.0), ret == 0);
 	//imshow("bm", bm);
 	//imshow("display", ret);
-	waitKey();
+	//waitKey();
+	ret = ret != 1;
+
 	ret.convertTo(ret,CV_32FC1);
 
 	return ret;
