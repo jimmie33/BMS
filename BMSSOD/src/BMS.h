@@ -59,6 +59,8 @@ cv::Mat computeCWS(const cv::Mat src, float reg, float marginRatio);
 void postProcessByRec8u(cv::Mat& salmap, int kernelWidth);
 void postProcessByRec(cv::Mat& salmap, int kernelWidth);
 
+void doCluster(const cv::Mat& distMat, double thresh, std::vector<std::vector<int>>& clusters);
+
 
 
 #endif

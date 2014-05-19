@@ -32,12 +32,19 @@ using namespace std;
 
 #define COV_MAT_REG 50.0f
 #define BORDER_MARGIN 30
+#define CLUSTER_THRESH 0
 
 Mat computeCWS(const Mat src, float reg, float marginRatio)
 {
 	assert(mSrc.channels() == 3);
 
-	vector<Mat> sampleVec(4);
+	vector<Mat> sampleVec(8);
+	vector<Mat> means(4);
+	vector<Mat> covs(4);
+	vector<double> pixNum(4);
+	vector<Mat> clusterMeans;
+	vector<Mat> clusterCovs;
+
 	Mat srcF;
 	Mat ret(src.size(), CV_32FC1);
 
@@ -45,19 +52,33 @@ Mat computeCWS(const Mat src, float reg, float marginRatio)
 	int rowMargin = (int)(marginRatio*src.rows);
 	int colMargin = (int)(marginRatio*src.cols);
 
-	sampleVec[0] = Mat(srcF, Range(0, rowMargin)).clone();
-	sampleVec[1] = Mat(srcF, Range(src.rows - rowMargin, src.rows)).clone();
-	sampleVec[2] = Mat(srcF, Range::all(), Range(0, colMargin)).clone();
-	sampleVec[3] = Mat(srcF, Range::all(), Range(src.cols - colMargin, src.cols)).clone();
+	sampleVec[0] = Mat(srcF, Range(0, rowMargin), Range(0, src.cols/2)).clone();
+	sampleVec[1] = Mat(srcF, Range(0, src.rows/2), Range(0, colMargin)).clone();
+
+	sampleVec[2] = Mat(srcF, Range(0, rowMargin), Range(src.cols/2, src.cols)).clone();
+	sampleVec[3] = Mat(srcF, Range(0, src.rows / 2), Range(src.cols - colMargin, src.cols)).clone();
+
+	sampleVec[4] = Mat(srcF, Range(src.rows - rowMargin, src.rows), Range(0, src.cols/2)).clone();
+	sampleVec[5] = Mat(srcF, Range(src.rows/2, src.rows), Range(0, colMargin)).clone();
+
+	sampleVec[6] = Mat(srcF, Range(src.rows - rowMargin, src.rows), Range(src.cols/2, src.cols)).clone();
+	sampleVec[7] = Mat(srcF, Range(src.rows / 2, src.rows), Range(src.cols - colMargin, src.cols)).clone();
 
 	Mat maxMap(src.size(), CV_32FC1);
 
 	for (int i = 0; i < 4; i++)
 	{
-		Mat meanF, covF;
-		Mat samples = sampleVec[i].reshape(1, sampleVec[i].rows*sampleVec[i].cols);
-		calcCovarMatrix(samples, covF, meanF, CV_COVAR_NORMAL | CV_COVAR_ROWS | CV_COVAR_SCALE, CV_32F);
+		Mat samples;
+		vconcat(sampleVec[2*i].reshape(1, sampleVec[2*i].rows*sampleVec[2*i].cols), 
+			sampleVec[2*i+1].reshape(1, sampleVec[2*i+1].rows*sampleVec[2*i+1].cols),
+			samples);
+		calcCovarMatrix(samples, covs[i], means[i], CV_COVAR_NORMAL | CV_COVAR_ROWS | CV_COVAR_SCALE, CV_32F);
+		pixNum[i] = samples.rows;
+	}
 
+	for (int i = 0; i < means.size(); i ++)
+	{
+		Mat covF = covs[i], meanF = means[i];
 		covF += Mat::eye(covF.rows, covF.cols, CV_32FC1)*reg;
 		SVD svd(covF);
 		Mat sqrtW;
@@ -122,7 +143,7 @@ BMS::BMS(const Mat& src)
 
 void BMS::computeSaliency(double step)
 {
-	Mat cws = computeCWS(mSrc, 50.0, 0.1);
+	Mat cws = computeCWS(mSrc, 50.0f, 0.1f);
 	for (int i=0;i<mFeatureMaps.size();++i)
 	{
 		Mat bm;
@@ -452,4 +473,43 @@ void postProcessByRec8u(cv::Mat& salmap, int kernelWidth)
 #else
 	cerr<<"IPP Not enabled."<<endl;
 #endif
+}
+
+void doCluster(const Mat& distMat, double thresh, std::vector<std::vector<int>>& clusters)
+{
+	clusters.clear();
+	int nmel = distMat.rows;
+	Mat mask = Mat::zeros (1, distMat.rows, CV_8UC1);
+	for (int i = 0; i < nmel; i++)
+	{
+		if (mask.at<uchar>(0,i) == 1)
+			continue;
+		vector<int> newCluster(1, i);
+		mask.at<uchar>(0, i) = 1;
+		int npos = 0;
+		while (npos < newCluster.size())
+		{
+			for (int j = i + 1; j < nmel; j++)
+			{
+				if (mask.at<uchar>(0, j) == 0 && distMat.at<float>(newCluster[npos], j) < thresh)
+				{
+					newCluster.push_back(j);
+					mask.at<char>(0, j) = 1;
+				}
+			}
+			npos++;
+		}
+		clusters.push_back(newCluster);
+	}
+
+	// print
+	/*cout << distMat << endl;
+	for (int i = 0; i < clusters.size(); i++)
+	{
+		for (int j = 0; j < clusters[i].size(); j++)
+		{
+			cout << clusters[i][j];
+		}
+		cout << endl;
+	}*/
 }
