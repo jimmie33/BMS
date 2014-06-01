@@ -28,7 +28,7 @@
 #include "BMS.h"
 #include "fileGettor.h"
 
-#define MAX_IMG_DIM 400
+#define MAX_IMG_DIM 300
 
 using namespace cv;
 using namespace std;
@@ -41,6 +41,25 @@ void help()
 	getchar();
 }
 
+Mat getDisMap()
+{
+	Mat ret(MAX_IMG_DIM, MAX_IMG_DIM, CV_32FC1);
+	float centerX = MAX_IMG_DIM / 2.0f;
+	float centerY = MAX_IMG_DIM / 2.0f;
+
+	for (int r = 0; r < MAX_IMG_DIM; r++)
+	{
+		for (int c = 0; c < MAX_IMG_DIM; c++)
+		{
+			ret.at<float>(r, c) = sqrt((r - centerY)*(r - centerY) + (c - centerX)*(c - centerX));
+		}
+	}
+
+	normalize(ret, ret, 0.0, 1.0, NORM_MINMAX);
+	ret = 1.0 - ret;
+
+	return ret;
+}
 
 void doWork(
 	const string& in_path,
@@ -54,6 +73,8 @@ void doWork(
 	FileGettor fg(in_path.c_str());
 	vector<string> file_list=fg.getFileList();
 
+	Mat disMat = getDisMap();
+
 	clock_t ttt;
 	double avg_time=0;
 	//#pragma omp parallel for
@@ -63,37 +84,39 @@ void doWork(
 		string ext=getExtension(file_list[i]);
 		if (!(ext.compare("jpg")==0 || ext.compare("jpeg")==0 || ext.compare("JPG")==0 || ext.compare("tif")==0 || ext.compare("png")==0 || ext.compare("bmp")==0))
 			continue;
-		cout<<file_list[i]<<"...";
+		//cout<<file_list[i]<<"...";
 
 		/* Preprocessing */
 		Mat src=imread(in_path+file_list[i]);
+
+		ttt = clock();
+
 		Mat src_small;
 		float w = (float)src.cols, h = (float)src.rows;
 		float maxD = max(w,h);
 		resize(src,src_small,Size((int)(MAX_IMG_DIM*w/maxD),(int)(MAX_IMG_DIM*h/maxD)),0.0,0.0,INTER_AREA);// standard: width: 600 pixel
 		cvtColor(src_small, src_small, CV_RGB2Lab);
-
+		
 		/* Computing saliency */
-		ttt=clock();
-
 		BMS bms(src_small);
 		bms.computeSaliency((double)sample_step);
 		
-		Mat result=bms.getSaliencyMap();
-
+		Mat result=bms.getSaliencyMap(disMat);
+		
 		/* Post-processing */
 		postProcessByRec8u(result, postprocess_width);
 		normalize(result, result, 0.0, 255.0, NORM_MINMAX);
+		resize(result, result, src.size());
 
 		ttt=clock()-ttt;
 		float process_time=(float)ttt/CLOCKS_PER_SEC;
 		avg_time+=process_time;
-		cout<<"average_time: "<<avg_time/(i+1)<<endl;
+		
 
 		/* Save the saliency map*/
-		resize(result,result,src.size());
 		imwrite(out_path+rmExtension(file_list[i])+".png",result);		
 	}
+	cout << "average_time: " << avg_time / file_list.size() << endl;
 }
 
 
@@ -118,5 +141,6 @@ int main(int args, char** argv)
 
 	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,POSTPROCESS_WIDTH);
 
+	getchar();
 	return 0;
 }

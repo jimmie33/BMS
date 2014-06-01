@@ -42,7 +42,7 @@ class BMS
 {
 public:
 	BMS (const cv::Mat& src);
-	cv::Mat getSaliencyMap();
+	cv::Mat getSaliencyMap(const cv::Mat& disMat);
 	void computeSaliency(double step);
 private:
 	cv::Mat mSaliencyMap;
@@ -56,6 +56,9 @@ private:
 };
 
 cv::Mat computeCWS(const cv::Mat src, float reg, float marginRatio);
+cv::Mat fastBMS(const std::vector<cv::Mat> featureMaps);
+
+
 void postProcessByRec8u(cv::Mat& salmap, int kernelWidth);
 void postProcessByRec(cv::Mat& salmap, int kernelWidth);
 

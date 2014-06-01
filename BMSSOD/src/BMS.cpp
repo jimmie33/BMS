@@ -38,12 +38,12 @@ Mat computeCWS(const Mat src, float reg, float marginRatio)
 {
 	assert(mSrc.channels() == 3);
 
-	vector<Mat> sampleVec(8);
+	vector<Mat> sampleVec(4);
 	vector<Mat> means(4);
 	vector<Mat> covs(4);
-	vector<double> pixNum(4);
-	vector<Mat> clusterMeans;
-	vector<Mat> clusterCovs;
+	//vector<double> pixNum(4);
+	//vector<Mat> clusterMeans;
+	//vector<Mat> clusterCovs;
 
 	Mat srcF;
 	Mat ret(src.size(), CV_32FC1);
@@ -52,7 +52,12 @@ Mat computeCWS(const Mat src, float reg, float marginRatio)
 	int rowMargin = (int)(marginRatio*src.rows);
 	int colMargin = (int)(marginRatio*src.cols);
 
-	sampleVec[0] = Mat(srcF, Range(0, rowMargin), Range(0, src.cols/2)).clone();
+	sampleVec[0] = Mat(srcF, Range(0, rowMargin)).clone();
+	sampleVec[1] = Mat(srcF, Range(src.rows - rowMargin, src.rows)).clone();
+	sampleVec[2] = Mat(srcF, Range::all(), Range(0, colMargin)).clone();
+	sampleVec[3] = Mat(srcF, Range::all(), Range(src.cols - colMargin, src.cols)).clone();
+
+	/*sampleVec[0] = Mat(srcF, Range(0, rowMargin), Range(0, src.cols/2)).clone();
 	sampleVec[1] = Mat(srcF, Range(0, src.rows/2), Range(0, colMargin)).clone();
 
 	sampleVec[2] = Mat(srcF, Range(0, rowMargin), Range(src.cols/2, src.cols)).clone();
@@ -62,18 +67,18 @@ Mat computeCWS(const Mat src, float reg, float marginRatio)
 	sampleVec[5] = Mat(srcF, Range(src.rows/2, src.rows), Range(0, colMargin)).clone();
 
 	sampleVec[6] = Mat(srcF, Range(src.rows - rowMargin, src.rows), Range(src.cols/2, src.cols)).clone();
-	sampleVec[7] = Mat(srcF, Range(src.rows / 2, src.rows), Range(src.cols - colMargin, src.cols)).clone();
+	sampleVec[7] = Mat(srcF, Range(src.rows / 2, src.rows), Range(src.cols - colMargin, src.cols)).clone();*/
 
 	Mat maxMap(src.size(), CV_32FC1);
 
 	for (int i = 0; i < 4; i++)
 	{
-		Mat samples;
+		/*Mat samples;
 		vconcat(sampleVec[2*i].reshape(1, sampleVec[2*i].rows*sampleVec[2*i].cols), 
 			sampleVec[2*i+1].reshape(1, sampleVec[2*i+1].rows*sampleVec[2*i+1].cols),
-			samples);
-		calcCovarMatrix(samples, covs[i], means[i], CV_COVAR_NORMAL | CV_COVAR_ROWS | CV_COVAR_SCALE, CV_32F);
-		pixNum[i] = samples.rows;
+			samples);*/
+		calcCovarMatrix(sampleVec[i].reshape(1, sampleVec[i].rows*sampleVec[i].cols), covs[i], means[i], CV_COVAR_NORMAL | CV_COVAR_ROWS | CV_COVAR_SCALE, CV_32F);
+		//pixNum[i] = samples.rows;
 	}
 
 	for (int i = 0; i < means.size(); i ++)
@@ -94,7 +99,7 @@ Mat computeCWS(const Mat src, float reg, float marginRatio)
 		//whitenedSrc.convertTo(whitenedSrc, CV_32FC1);
 		reduce(whitenedSrc, whitenedSrc, 1, CV_REDUCE_SUM);
 		whitenedSrc = whitenedSrc.reshape(1, src.rows);
-		sqrt(whitenedSrc, whitenedSrc);
+		//sqrt(whitenedSrc, whitenedSrc);
 		normalize(whitenedSrc, whitenedSrc, 1.0, 0.0, NORM_MINMAX);
 		if (i == 1)
 			maxMap = max(ret, whitenedSrc);
@@ -120,9 +125,17 @@ BMS::BMS(const Mat& src)
 {
 	mSrc=src.clone();
 	mSaliencyMap = Mat::zeros(src.size(), CV_32FC1);
-	mBorderPriorMap = Mat::zeros(src.size(), CV_32FC1);
 
-	whitenFeatMap(COV_MAT_REG);
+	split(mSrc, mFeatureMaps);
+
+	for (int i = 0; i < mFeatureMaps.size(); i++)
+	{
+		normalize(mFeatureMaps[i], mFeatureMaps[i], 255.0, 0.0, NORM_MINMAX);
+		medianBlur(mFeatureMaps[i], mFeatureMaps[i], 5);
+	}
+	//mBorderPriorMap = Mat::zeros(src.size(), CV_32FC1);
+
+	//whitenFeatMap(COV_MAT_REG);
 	//computeBorderPriorMap(10.0f, 0.25);
 	/*Mat lab;
 	cvtColor(mSrc,lab,CV_RGB2Lab);
@@ -144,27 +157,28 @@ BMS::BMS(const Mat& src)
 void BMS::computeSaliency(double step)
 {
 	Mat cws = computeCWS(mSrc, 50.0f, 0.1f);
-	for (int i=0;i<mFeatureMaps.size();++i)
-	{
-		Mat bm;
-		double max_,min_;
-		minMaxLoc(mFeatureMaps[i],&min_,&max_);
-		//step = (max_ - min_) / 30.0f;
-		for (double thresh = 0; thresh < 255; thresh += step)
-		{
-			bm=mFeatureMaps[i]>thresh;
-			Mat am = getAttentionMap(bm);
-			mSaliencyMap += am;
-			mAttMapCount++;
-			//bm=_feature_maps[i]<=thresh;
-			//registerPosition(bm);
-		}
-	}
+	//for (int i=0;i<mFeatureMaps.size();++i)
+	//{
+	//	Mat bm;
+	//	double max_,min_;
+	//	minMaxLoc(mFeatureMaps[i],&min_,&max_);
+	//	//step = (max_ - min_) / 30.0f;
+	//	for (double thresh = 0; thresh < 255; thresh += step)
+	//	{
+	//		bm=mFeatureMaps[i]>thresh;
+	//		Mat am = getAttentionMap(bm);
+	//		mSaliencyMap += am;
+	//		mAttMapCount++;
+	//		//bm=_feature_maps[i]<=thresh;
+	//		//registerPosition(bm);
+	//	}
+	//}
 
+	mSaliencyMap = fastBMS(mFeatureMaps);
 	normalize(mSaliencyMap, mSaliencyMap, 0.0, 1.0, NORM_MINMAX);
 	/*Mat intersection = cws.mul(mSaliencyMap);
 	normalize(intersection, intersection, 0.0, 1.0, NORM_MINMAX);*/
-	mSaliencyMap =  cws + mSaliencyMap;
+	mSaliencyMap +=  cws;
 }
 
 
@@ -237,10 +251,14 @@ cv::Mat BMS::getAttentionMap(const cv::Mat& bm)
 	return ret;
 }
 
-Mat BMS::getSaliencyMap()
+Mat BMS::getSaliencyMap(const Mat& disMap)
 {
 	Mat a,b,ret; 
 
+	normalize(mSaliencyMap, ret, 0.0, 1.0, NORM_MINMAX);
+	Mat _disMap;
+	resize(disMap, _disMap, mSaliencyMap.size());
+	mSaliencyMap = mSaliencyMap.mul(_disMap);
 	normalize(mSaliencyMap, ret, 0.0, 255.0, NORM_MINMAX);
 	ret.convertTo(ret,CV_8UC1);
 	return ret;
@@ -512,4 +530,184 @@ void doCluster(const Mat& distMat, double thresh, std::vector<std::vector<int>>&
 		}
 		cout << endl;
 	}*/
+}
+
+void rasterScan(const Mat& featMap, Mat& map, Mat& lb, Mat& ub)
+{
+	Size sz = featMap.size();
+	float *pMapup = (float*)map.data + 1;
+	float *pMap = pMapup + sz.width;
+	uchar *pFeatup = featMap.data + 1;
+	uchar *pFeat = pFeatup + sz.width;
+	uchar *pLBup = lb.data + 1;
+	uchar *pLB = pLBup + sz.width;
+	uchar *pUBup = ub.data + 1;
+	uchar *pUB = pUBup + sz.width;
+
+	float mapPrev;
+	float featPrev;
+	uchar lbPrev, ubPrev;
+
+	float lfV, upV;
+	int flag;
+	for (int r = 1; r < sz.height - 1; r++)
+	{
+		mapPrev = *(pMap - 1);
+		featPrev = *(pFeat - 1);
+		lbPrev = *(pLB - 1);
+		ubPrev = *(pUB - 1);
+
+
+		for (int c = 1; c < sz.width - 1; c++)
+		{
+			lfV = (*pFeat >= lbPrev && *pFeat <= ubPrev) ? mapPrev : mapPrev + abs((float)(*pFeat) - featPrev);
+			upV = (*pFeat >= *pLBup && *pFeat <= *pUBup) ? *pMapup : *pMapup + abs((float)(*pFeat) - (float)(*pFeatup));
+
+			flag = 0;
+			if (lfV < *pMap)
+			{
+				*pMap = lfV;
+				flag = 1;
+			}
+			if (upV < *pMap)
+			{
+				*pMap = upV;
+				flag = 2;
+			}
+
+			switch (flag)
+			{
+			case 0:		// no update
+				break;
+			case 1:		// update from left
+				*pLB = MIN(*pFeat, lbPrev);
+				*pUB = MAX(*pFeat, ubPrev);
+				break;
+			case 2:		// update from up
+				*pLB = MIN(*pFeat, *pLBup);
+				*pUB = MAX(*pFeat, *pUBup);
+				break;
+			default:
+				break;
+			}
+
+			mapPrev = *pMap;
+			pMap++; pMapup++;
+			featPrev = *pFeat;
+			pFeat++; pFeatup++;
+			lbPrev = *pLB;
+			pLB++; pLBup++;
+			ubPrev = *pUB;
+			pUB++; pUBup++;
+		}
+		pMapup += 2; pMap += 2;
+		pFeat += 2; pFeatup += 2;
+		pLBup += 2; pLB += 2;
+		pUBup += 2; pUB += 2;
+	}
+}
+
+void invRasterScan(const Mat& featMap, Mat& map, Mat& lb, Mat& ub)
+{
+	Size sz = featMap.size();
+	int datalen = sz.width*sz.height;
+	float *pMapdn = (float*)map.data + datalen - 2;
+	float *pMap = pMapdn - sz.width;
+	uchar *pFeatdn = featMap.data + datalen - 2;
+	uchar *pFeat = pFeatdn - sz.width;
+	uchar *pLBdn = lb.data + datalen - 2;
+	uchar *pLB = pLBdn - sz.width;
+	uchar *pUBdn = ub.data + datalen - 2;
+	uchar *pUB = pUBdn - sz.width;
+	
+	float mapPrev;
+	float featPrev;
+	uchar lbPrev, ubPrev;
+
+	float rtV, dnV;
+	int flag;
+	for (int r = 1; r < sz.height - 1; r++)
+	{
+		mapPrev = *(pMap + 1);
+		featPrev = *(pFeat + 1);
+		lbPrev = *(pLB + 1);
+		ubPrev = *(pUB + 1);
+
+		for (int c = 1; c < sz.width - 1; c++)
+		{
+			rtV = (*pFeat >= lbPrev && *pFeat <= ubPrev) ? mapPrev : mapPrev + abs((float)(*pFeat) - featPrev);
+			dnV = (*pFeat >= *pLBdn && *pFeat <= *pUBdn) ? *pMapdn : *pMapdn + abs((float)(*pFeat) - (float)(*pFeatdn));
+
+			flag = 0;
+			if (rtV < *pMap)
+			{
+				*pMap = rtV;
+				flag = 1;
+			}
+			if (dnV < *pMap)
+			{
+				*pMap = dnV;
+				flag = 2;
+			}
+
+			switch (flag)
+			{
+			case 0:		// no update
+				break;
+			case 1:		// update from right
+				*pLB = MIN(*pFeat, lbPrev);
+				*pUB = MAX(*pFeat, ubPrev);
+				break;
+			case 2:		// update from down
+				*pLB = MIN(*pFeat, *pLBdn);
+				*pUB = MAX(*pFeat, *pUBdn);
+				break;
+			default:
+				break;
+			}
+
+			mapPrev = *pMap;
+			pMap--; pMapdn--;
+			featPrev = *pFeat;
+			pFeat--; pFeatdn--;
+			lbPrev = *pLB;
+			pLB--; pLBdn--;
+			ubPrev = *pUB;
+			pUB--; pUBdn--;
+		}
+
+
+		pMapdn -= 2; pMap -= 2;
+		pFeatdn -= 2; pFeat -= 2;
+		pLBdn -= 2; pLB -= 2;
+		pUBdn -= 2; pUB -= 2;
+	}
+}
+
+cv::Mat fastBMS(const std::vector<cv::Mat> featureMaps)
+{
+	assert(featureMaps[0].type() == CV_8UC1);
+
+	Size sz = featureMaps[0].size();
+	Mat ret = Mat::zeros(sz, CV_32FC1);
+	if (sz.width < 3 || sz.height < 3)
+		return ret;
+
+	for (int i = 0; i < featureMaps.size(); i++)
+	{
+		Mat map = Mat::zeros(sz, CV_32FC1);
+		Mat mapROI(map, Rect(1, 1, sz.width - 2, sz.height - 2));
+		mapROI.setTo(Scalar(100000));
+		Mat lb = featureMaps[i].clone();
+		Mat ub = featureMaps[i].clone();
+
+		rasterScan(featureMaps[i], map, lb, ub);
+		invRasterScan(featureMaps[i], map, lb, ub);
+		rasterScan(featureMaps[i], map, lb, ub);
+		
+		ret += map;
+	}
+
+	return ret;
+	
 }
