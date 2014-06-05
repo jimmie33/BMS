@@ -50,7 +50,9 @@ void doWork(
 	int dilation_width_2,
 	float blur_std,
 	bool use_normalize,
-	bool handle_border
+	bool handle_border,
+	int colorSpace,
+	bool whitening
 	)
 {
 	if (in_path.compare(out_path)==0)
@@ -81,7 +83,7 @@ void doWork(
 		/* Computing saliency */
 		ttt=clock();
 
-		BMS bms(src_small,dilation_width_1,use_normalize,handle_border);
+		BMS bms(src_small, dilation_width_1, use_normalize, handle_border, colorSpace, whitening);
 		bms.computeSaliency((double)sample_step);
 		
 		Mat result=bms.getSaliencyMap();
@@ -112,7 +114,7 @@ void doWork(
 
 int main(int args, char** argv)
 {
-	if (args != 9)
+	if (args != 11)
 	{
 		cout<<"wrong number of input arguments."<<endl;
 		help();
@@ -132,9 +134,11 @@ int main(int args, char** argv)
 	float BLUR_STD			=	(float)atof(argv[6]);//20: sigma	
 	bool NORMALIZE			=	atoi(argv[7]);//1: whether to use L2-normalization
 	bool HANDLE_BORDER		=	atoi(argv[8]);//0: to handle the images with artificial frames
+	int COLORSPACE			=	atoi(argv[9]);//
+	bool WHITENING			=	atoi(argv[10]);
 	
 
-	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,DILATION_WIDTH_1,DILATION_WIDTH_2,BLUR_STD,NORMALIZE,HANDLE_BORDER);
+	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,DILATION_WIDTH_1,DILATION_WIDTH_2,BLUR_STD,NORMALIZE,HANDLE_BORDER, COLORSPACE, WHITENING);
 
 	return 0;
 }

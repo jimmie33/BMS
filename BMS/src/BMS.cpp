@@ -32,14 +32,29 @@ using namespace std;
 
 #define COV_MAT_REG 50.0f
 
-BMS::BMS(const Mat& src, int dw1, bool nm, bool hb)
-:mDilationWidth_1(dw1), mNormalize(nm), mHandleBorder(hb), mAttMapCount(0)
+BMS::BMS(const Mat& src, int dw1, bool nm, bool hb, int colorSpace, bool whitening)
+:mDilationWidth_1(dw1), mNormalize(nm), mHandleBorder(hb), mAttMapCount(0), mColorSpace(colorSpace), mWhitening(whitening)
 {
 	mSrc=src.clone();
 	mSaliencyMap = Mat::zeros(src.size(), CV_32FC1);
 	mBorderPriorMap = Mat::zeros(src.size(), CV_32FC1);
 
-	whitenFeatMap(COV_MAT_REG);
+	if (CL_RGB & colorSpace)
+		whitenFeatMap(mSrc, COV_MAT_REG);
+	if (CL_Lab & colorSpace)
+	{
+		Mat lab;
+		cvtColor(mSrc, lab, CV_RGB2Lab);
+		whitenFeatMap(lab, COV_MAT_REG);
+	}
+	if (CL_Luv & colorSpace)
+	{
+		Mat luv;
+		cvtColor(mSrc, luv, CV_RGB2Luv);
+		whitenFeatMap(luv, COV_MAT_REG);
+	}
+
+	
 	//computeBorderPriorMap(10.0f, 0.25);
 	/*Mat lab;
 	cvtColor(mSrc,lab,CV_RGB2Lab);
@@ -66,7 +81,7 @@ void BMS::computeSaliency(double step)
 		double max_,min_;
 		minMaxLoc(mFeatureMaps[i],&min_,&max_);
 		//step = (max_ - min_) / 30.0f;
-		for (double thresh = 0; thresh < 255; thresh += step)
+		for (double thresh = min_; thresh < max_; thresh += step)
 		{
 			bm=mFeatureMaps[i]>thresh;
 			Mat am = getAttentionMap(bm, mDilationWidth_1, mNormalize, mHandleBorder);
@@ -148,13 +163,27 @@ Mat BMS::getSaliencyMap()
 	return ret;
 }
 
-void BMS::whitenFeatMap(float reg)
+void BMS::whitenFeatMap(const cv::Mat& img, float reg)
 {
-	assert(mSrc.channels() == 3);
+	assert(img.channels() == 3 && img.type() == CV_8UC3);
 	
+	vector<Mat> featureMaps;
+	
+	if (!mWhitening)
+	{
+		split(img, featureMaps);
+		for (int i = 0; i < featureMaps.size(); i++)
+		{
+			normalize(featureMaps[i], featureMaps[i], 255.0, 0.0, NORM_MINMAX);
+			medianBlur(featureMaps[i], featureMaps[i], 3);
+			mFeatureMaps.push_back(featureMaps[i]);
+		}
+		return;
+	}
+
 	Mat srcF,meanF,covF;
-	mSrc.convertTo(srcF, CV_32FC3);
-	Mat samples = srcF.reshape(1, mSrc.rows*mSrc.cols);
+	img.convertTo(srcF, CV_32FC3);
+	Mat samples = srcF.reshape(1, img.rows*img.cols);
 	calcCovarMatrix(samples, covF, meanF, CV_COVAR_NORMAL | CV_COVAR_ROWS | CV_COVAR_SCALE, CV_32F);
 
 	covF += Mat::eye(covF.rows, covF.cols, CV_32FC1)*reg;
@@ -163,17 +192,19 @@ void BMS::whitenFeatMap(float reg)
 	sqrt(svd.w,sqrtW);
 	Mat sqrtInvCovF = svd.u * Mat::diag(1.0/sqrtW);
 
-	srcF = srcF - Scalar(meanF.at<float>(0, 0), meanF.at<float>(0, 1), meanF.at<float>(0, 2));
-	Mat whitenedSrc = srcF.reshape(1, mSrc.rows*mSrc.cols)*sqrtInvCovF;
-	whitenedSrc = whitenedSrc.reshape(3, mSrc.rows);
+	//srcF = srcF - Scalar(meanF.at<float>(0, 0), meanF.at<float>(0, 1), meanF.at<float>(0, 2));
+	Mat whitenedSrc = srcF.reshape(1, img.rows*img.cols)*sqrtInvCovF;
+	whitenedSrc = whitenedSrc.reshape(3, img.rows);
 	//whitenedSrc.convertTo(whitenedSrc, CV_8U, 64.0, 127);
-	split(whitenedSrc, mFeatureMaps);
+	
+	split(whitenedSrc, featureMaps);
 
-	for (int i = 0; i < mFeatureMaps.size(); i++)
+	for (int i = 0; i < featureMaps.size(); i++)
 	{
-		normalize(mFeatureMaps[i], mFeatureMaps[i], 255.0, 0.0, NORM_MINMAX);
-		mFeatureMaps[i].convertTo(mFeatureMaps[i], CV_8U);
-		medianBlur(mFeatureMaps[i], mFeatureMaps[i], 3);
+		normalize(featureMaps[i], featureMaps[i], 255.0, 0.0, NORM_MINMAX);
+		featureMaps[i].convertTo(featureMaps[i], CV_8U);
+		medianBlur(featureMaps[i], featureMaps[i], 3);
+		mFeatureMaps.push_back(featureMaps[i]);
 	}
 }
 
