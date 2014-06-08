@@ -68,6 +68,8 @@ void doWork(
 	int postprocess_width
 	)
 {
+	/*namedWindow("debug1");
+	namedWindow("debug2");*/
 	if (in_path.compare(out_path)==0)
 		cerr<<"output path must be different from input path!"<<endl;
 	FileGettor fg(in_path.c_str());
@@ -89,23 +91,28 @@ void doWork(
 		/* Preprocessing */
 		Mat src=imread(in_path+file_list[i]);
 
+
 		ttt = clock();
 
 		Mat src_small;
 		float w = (float)src.cols, h = (float)src.rows;
 		float maxD = max(w,h);
-		resize(src,src_small,Size((int)(MAX_IMG_DIM*w/maxD),(int)(MAX_IMG_DIM*h/maxD)),0.0,0.0,INTER_AREA);// standard: width: 600 pixel
-		cvtColor(src_small, src_small, CV_RGB2Lab);
+		resize(src,src_small,Size((int)(MAX_IMG_DIM*w/maxD),(int)(MAX_IMG_DIM*h/maxD)),0.0,0.0,INTER_AREA);// standard: width: 300 pixel
+		Mat srcRoi;
+		Rect roi;
+		removeFrame(src_small, srcRoi, roi);
+
+		cvtColor(srcRoi, srcRoi, CV_RGB2Lab);
 		
 		/* Computing saliency */
-		BMS bms(src_small);
+		BMS bms(srcRoi);
 		bms.computeSaliency((double)sample_step);
 		
-		Mat result=bms.getSaliencyMap(disMat);
-		
+		Mat resultRoi=bms.getSaliencyMap(disMat);
+		Mat result = Mat::zeros(src_small.size(), CV_8UC1);
 		/* Post-processing */
-		postProcessByRec8u(result, postprocess_width);
-		normalize(result, result, 0.0, 255.0, NORM_MINMAX);
+		postProcessByRec8u(resultRoi, postprocess_width);
+		normalize(resultRoi, Mat(result, roi), 0.0, 255.0, NORM_MINMAX);
 		resize(result, result, src.size());
 
 		ttt=clock()-ttt;
@@ -141,6 +148,5 @@ int main(int args, char** argv)
 
 	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,POSTPROCESS_WIDTH);
 
-	getchar();
 	return 0;
 }

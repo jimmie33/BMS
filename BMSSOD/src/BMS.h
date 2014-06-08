@@ -58,6 +58,8 @@ private:
 cv::Mat computeCWS(const cv::Mat src, float reg, float marginRatio);
 cv::Mat fastBMS(const std::vector<cv::Mat> featureMaps);
 
+int findFrameMargin(const cv::Mat& img, bool reverse);
+bool removeFrame(const cv::Mat& inImg, cv::Mat& outImg, cv::Rect &roi);
 
 void postProcessByRec8u(cv::Mat& salmap, int kernelWidth);
 void postProcessByRec(cv::Mat& salmap, int kernelWidth);

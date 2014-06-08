@@ -33,6 +33,9 @@ using namespace std;
 #define COV_MAT_REG 50.0f
 #define BORDER_MARGIN 30
 #define CLUSTER_THRESH 0
+#define TOLERANCE 0.01
+#define FRAME_MAX 20
+#define SOBEL_THRESH 0.4
 
 Mat computeCWS(const Mat src, float reg, float marginRatio)
 {
@@ -709,5 +712,97 @@ cv::Mat fastBMS(const std::vector<cv::Mat> featureMaps)
 	}
 
 	return ret;
+	
+}
+
+int findFrameMargin(const Mat& img, bool reverse)
+{
+	Mat edgeMap, edgeMapDil, edgeMask;
+	Sobel(img, edgeMap, CV_16SC1, 0, 1);
+	edgeMap = abs(edgeMap);
+	edgeMap.convertTo(edgeMap, CV_8UC1);
+	edgeMask = edgeMap < (SOBEL_THRESH * 255.0);
+	dilate(edgeMap, edgeMapDil, Mat(), Point(-1, -1), 2);
+	edgeMap = edgeMap == edgeMapDil;
+	edgeMap.setTo(Scalar(0.0), edgeMask);
+
+
+	if (!reverse)
+	{
+		for (int i = edgeMap.rows - 1; i >= 0; i--)
+			if (mean(edgeMap.row(i))[0] > 0.6*255.0)
+				return i + 1;
+	}
+	else
+	{
+		for (int i = 0; i < edgeMap.rows; i++)
+			if (mean(edgeMap.row(i))[0] > 0.6*255.0)
+				return edgeMap.rows - i;
+	}
+
+	return 0;
+}
+
+bool removeFrame(const cv::Mat& inImg, cv::Mat& outImg, cv::Rect &roi)
+{
+	if (inImg.rows < 2 * (FRAME_MAX + 3) || inImg.cols < 2 * (FRAME_MAX + 3))
+	{
+		roi = Rect(0, 0, inImg.cols, inImg.rows);
+		outImg = inImg;
+		return false;
+	}
+
+	Mat imgGray;
+	cvtColor(inImg, imgGray, CV_RGB2GRAY);
+	// fast rejection
+	/*if (abs(mean(imgGray.row(0))[0] - mean(imgGray.row(imgGray.rows - 1))[0]) > TOLERANCE * 255.0)
+	{
+		roi = Rect(0, 0, imgGray.cols, imgGray.rows);
+		outImg = inImg;
+		return false;
+	}*/
+
+	int up, dn, lf, rt;
+	
+	up = findFrameMargin(imgGray.rowRange(0, FRAME_MAX), false);
+	dn = findFrameMargin(imgGray.rowRange(imgGray.rows - FRAME_MAX, imgGray.rows), true);
+	lf = findFrameMargin(imgGray.colRange(0, FRAME_MAX).t(), false);
+	rt = findFrameMargin(imgGray.colRange(imgGray.cols - FRAME_MAX, imgGray.cols).t(), true);
+
+	int margin = MAX(up, MAX(dn, MAX(lf, rt)));
+	if ( margin == 0 )
+	{
+		roi = Rect(0, 0, imgGray.cols, imgGray.rows);
+		outImg = inImg;
+		return false;
+	}
+
+	int count = 0;
+	count = up == 0 ? count : count + 1;
+	count = dn == 0 ? count : count + 1;
+	count = lf == 0 ? count : count + 1;
+	count = rt == 0 ? count : count + 1;
+
+	// cut four border region if at least 2 border frames are detected
+	if (count > 1)
+	{
+		margin += 2;
+		roi = Rect(margin, margin, inImg.cols - 2*margin, inImg.rows - 2*margin);
+		outImg = Mat(inImg, roi);
+
+		return true;
+	}
+
+	// otherwise, cut only one border
+	up = up == 0 ? up : up + 2;
+	dn = dn == 0 ? dn : dn + 2;
+	lf = lf == 0 ? lf : lf + 2;
+	rt = rt == 0 ? rt : rt + 2;
+
+	
+	roi = Rect(lf, up, inImg.cols - lf - rt, inImg.rows - up - dn);
+	outImg = Mat(inImg, roi);
+
+	return true;
 	
 }
