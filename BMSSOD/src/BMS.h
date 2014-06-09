@@ -45,8 +45,10 @@ public:
 	cv::Mat getSaliencyMap(const cv::Mat& disMat);
 	cv::Mat getSaliencyMap();
 	void computeSaliency(double step);
+	cv::Mat getBMSMap() const { return mBMSMap; }
 private:
 	cv::Mat mSaliencyMap;
+	cv::Mat mBMSMap;
 	int mAttMapCount;
 	cv::Mat mBorderPriorMap;
 	cv::Mat mSrc;
@@ -62,7 +64,7 @@ cv::Mat fastBMS(const std::vector<cv::Mat> featureMaps);
 int findFrameMargin(const cv::Mat& img, bool reverse);
 bool removeFrame(const cv::Mat& inImg, cv::Mat& outImg, cv::Rect &roi);
 
-void postProcessByRec8u(cv::Mat& salmap, int kernelWidth);
+void postProcessByRec8u(cv::Mat& salmap, int kernelWidth, double thresh);
 void postProcessByRec8u(cv::Mat& salmap, int kernelWidth, const cv::Mat& disMat);
 void postProcessByRec(cv::Mat& salmap, int kernelWidth);
 

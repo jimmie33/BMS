@@ -177,11 +177,11 @@ void BMS::computeSaliency(double step)
 	//	}
 	//}
 
-	mSaliencyMap = fastBMS(mFeatureMaps);
-	normalize(mSaliencyMap, mSaliencyMap, 0.0, 1.0, NORM_MINMAX);
+	mBMSMap = fastBMS(mFeatureMaps);
+	normalize(mBMSMap, mBMSMap, 0.0, 1.0, NORM_MINMAX);
 	/*Mat intersection = cws.mul(mSaliencyMap);
 	normalize(intersection, intersection, 0.0, 1.0, NORM_MINMAX);*/
-	mSaliencyMap +=  cws;
+	mSaliencyMap = mBMSMap + cws;
 }
 
 
@@ -480,7 +480,7 @@ void postProcessByRec(cv::Mat& salmap, int kernelWidth)
 #endif
 }
 
-void postProcessByRec8u(cv::Mat& salmap, int kernelWidth)
+void postProcessByRec8u(cv::Mat& salmap, int kernelWidth, double thresh)
 {
 	assert(salmap.type() == CV_8UC1);
 #ifdef USE_IPP
@@ -490,6 +490,11 @@ void postProcessByRec8u(cv::Mat& salmap, int kernelWidth)
 	/*status = ippiErode32fWrapper(salmap, temp, kernelWidth);
 	if (status != ippStsNoErr) cerr << "postProcessByRec: Erosion: " << ippGetStatusString(status) << endl;*/
 	erode(salmap, temp, Mat(), Point(-1, -1), kernelWidth / 2);
+
+	// do better work with the seed map
+	Mat maskTop = salmap < thresh;
+	temp.setTo(Scalar(0.0), maskTop);
+
 
 	status = ippiRecDilate8uWrapper(salmap, temp, kernelWidth);
 	if (status != ippStsNoErr) cerr << "postProcessByRec: DilationRec: " << ippGetStatusString(status) << endl;

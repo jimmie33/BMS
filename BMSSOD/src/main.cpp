@@ -109,28 +109,36 @@ void doWork(
 		bms.computeSaliency((double)sample_step);
 		
 		Mat resultRoi=bms.getSaliencyMap(disMat);
-		Mat result = Mat::zeros(src_small.size(), CV_8UC1);
+		Mat result = Mat::zeros(src_small.size(), CV_32FC1);
 		/* Post-processing */
-		postProcessByRec8u(resultRoi, postprocess_width);
-		/*resultRoi.convertTo(resultRoi, CV_32FC1);
-		normalize(resultRoi, resultRoi, 0.0, 1.0, NORM_MINMAX);
-		exp(-2*(resultRoi - 2*mean(resultRoi)[0]), resultRoi);
-		resultRoi += 1.0;
-		resultRoi = 1.0 / resultRoi;*/
-
-		//resultRoi.setTo(Scalar(0.0), resultRoi < mean(resultRoi)[0]);
-		//resultRoi.convertTo(resultRoi, CV_16SC1);//
-		//Mat resultEnhance = resultRoi > mean(resultRoi)[0];
-		//resultEnhance.convertTo(resultEnhance, CV_16SC1);
-		//resultRoi += resultEnhance;//
-
+		postProcessByRec8u(resultRoi, postprocess_width, 127.0);
+		normalize(resultRoi, resultRoi, 0.0, 255.0, NORM_MINMAX);
+		Mat resultROI2;
+		resultRoi.convertTo(resultROI2, CV_32FC1);
+		postProcessByRec8u(resultRoi, 2*postprocess_width,127.0);
+		normalize(resultRoi, resultRoi, 0.0, 255.0, NORM_MINMAX);
 		resultRoi.convertTo(resultRoi, CV_32FC1);
+		resultRoi += resultROI2;
+
+		//resultRoi.convertTo(resultRoi, CV_32FC1);
+		normalize(resultRoi, resultRoi, 0.0, 1.0, NORM_MINMAX);
+		Mat bmsMap = bms.getBMSMap();
+		bmsMap.convertTo(bmsMap,CV_8UC1,255.0);
+		double mVal1 = mean(resultRoi, bmsMap > 127)[0];
+		double mVal2 = mean(resultRoi, bmsMap <= 127)[0];
+
+		exp(-10*(resultRoi - 0.5*(mVal1+mVal2)), resultRoi);
+		resultRoi += 1.0;
+		resultRoi = 1.0 / resultRoi;
+
+
+		/*resultRoi.convertTo(resultRoi, CV_32FC1);
 		resultRoi *= 2.0;
 		resultRoi -= 64.0;
-		resultRoi.convertTo(resultRoi, CV_8UC1);
+		resultRoi.convertTo(resultRoi, CV_8UC1);*/
 		normalize(resultRoi, Mat(result, roi), 0.0, 255.0, NORM_MINMAX);
 		//equalizeHist(result, result);
-		//result.convertTo(result, CV_8UC1);
+		result.convertTo(result, CV_8UC1);
 		
 		resize(result, result, src.size());
 
