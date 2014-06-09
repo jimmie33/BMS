@@ -112,7 +112,26 @@ void doWork(
 		Mat result = Mat::zeros(src_small.size(), CV_8UC1);
 		/* Post-processing */
 		postProcessByRec8u(resultRoi, postprocess_width);
+		/*resultRoi.convertTo(resultRoi, CV_32FC1);
+		normalize(resultRoi, resultRoi, 0.0, 1.0, NORM_MINMAX);
+		exp(-2*(resultRoi - 2*mean(resultRoi)[0]), resultRoi);
+		resultRoi += 1.0;
+		resultRoi = 1.0 / resultRoi;*/
+
+		//resultRoi.setTo(Scalar(0.0), resultRoi < mean(resultRoi)[0]);
+		//resultRoi.convertTo(resultRoi, CV_16SC1);//
+		//Mat resultEnhance = resultRoi > mean(resultRoi)[0];
+		//resultEnhance.convertTo(resultEnhance, CV_16SC1);
+		//resultRoi += resultEnhance;//
+
+		resultRoi.convertTo(resultRoi, CV_32FC1);
+		resultRoi *= 2.0;
+		resultRoi -= 64.0;
+		resultRoi.convertTo(resultRoi, CV_8UC1);
 		normalize(resultRoi, Mat(result, roi), 0.0, 255.0, NORM_MINMAX);
+		//equalizeHist(result, result);
+		//result.convertTo(result, CV_8UC1);
+		
 		resize(result, result, src.size());
 
 		ttt=clock()-ttt;

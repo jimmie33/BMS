@@ -43,6 +43,7 @@ class BMS
 public:
 	BMS (const cv::Mat& src);
 	cv::Mat getSaliencyMap(const cv::Mat& disMat);
+	cv::Mat getSaliencyMap();
 	void computeSaliency(double step);
 private:
 	cv::Mat mSaliencyMap;
@@ -62,6 +63,7 @@ int findFrameMargin(const cv::Mat& img, bool reverse);
 bool removeFrame(const cv::Mat& inImg, cv::Mat& outImg, cv::Rect &roi);
 
 void postProcessByRec8u(cv::Mat& salmap, int kernelWidth);
+void postProcessByRec8u(cv::Mat& salmap, int kernelWidth, const cv::Mat& disMat);
 void postProcessByRec(cv::Mat& salmap, int kernelWidth);
 
 void doCluster(const cv::Mat& distMat, double thresh, std::vector<std::vector<int>>& clusters);

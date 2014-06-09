@@ -133,7 +133,7 @@ BMS::BMS(const Mat& src)
 
 	for (int i = 0; i < mFeatureMaps.size(); i++)
 	{
-		normalize(mFeatureMaps[i], mFeatureMaps[i], 255.0, 0.0, NORM_MINMAX);
+		//normalize(mFeatureMaps[i], mFeatureMaps[i], 255.0, 0.0, NORM_MINMAX);
 		medianBlur(mFeatureMaps[i], mFeatureMaps[i], 5);
 	}
 	//mBorderPriorMap = Mat::zeros(src.size(), CV_32FC1);
@@ -256,7 +256,7 @@ cv::Mat BMS::getAttentionMap(const cv::Mat& bm)
 
 Mat BMS::getSaliencyMap(const Mat& disMap)
 {
-	Mat a,b,ret; 
+	Mat ret; 
 
 	normalize(mSaliencyMap, ret, 0.0, 1.0, NORM_MINMAX);
 	Mat _disMap;
@@ -264,6 +264,15 @@ Mat BMS::getSaliencyMap(const Mat& disMap)
 	mSaliencyMap = mSaliencyMap.mul(_disMap);
 	normalize(mSaliencyMap, ret, 0.0, 255.0, NORM_MINMAX);
 	ret.convertTo(ret,CV_8UC1);
+	return ret;
+}
+
+Mat BMS::getSaliencyMap()
+{
+	Mat ret;
+
+	normalize(mSaliencyMap, ret, 0.0, 255.0, NORM_MINMAX);
+	ret.convertTo(ret, CV_8UC1);
 	return ret;
 }
 
@@ -493,6 +502,38 @@ void postProcessByRec8u(cv::Mat& salmap, int kernelWidth)
 	if (status != ippStsNoErr) cerr << "postProcessByRec: ErosionRec: " << ippGetStatusString(status) << endl;
 #else
 	cerr<<"IPP Not enabled."<<endl;
+#endif
+}
+
+
+void postProcessByRec8u(cv::Mat& salmap, int kernelWidth, const cv::Mat& disMat)
+{
+	assert(salmap.type() == CV_8UC1);
+
+	Mat _disMat;
+	resize(disMat, _disMat, salmap.size());
+#ifdef USE_IPP
+	Mat temp(salmap.size(), CV_8UC1);
+	IppStatus status;
+
+	/*status = ippiErode32fWrapper(salmap, temp, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: Erosion: " << ippGetStatusString(status) << endl;*/
+	erode(salmap, temp, Mat(), Point(-1, -1), kernelWidth / 2);
+	temp.convertTo(temp, CV_32FC1);
+	temp = temp.mul(_disMat);
+	temp.convertTo(temp, CV_8UC1);
+
+	status = ippiRecDilate8uWrapper(salmap, temp, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: DilationRec: " << ippGetStatusString(status) << endl;
+
+	/*status = ippiDilate32fWrapper(temp, salmap, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: Dilation: " << ippGetStatusString(status) << endl;*/
+	dilate(temp, salmap, Mat(), Point(-1, -1), kernelWidth / 2);
+
+	status = ippiRecErode8uWrapper(temp, salmap, kernelWidth);
+	if (status != ippStsNoErr) cerr << "postProcessByRec: ErosionRec: " << ippGetStatusString(status) << endl;
+#else
+	cerr << "IPP Not enabled." << endl;
 #endif
 }
 
