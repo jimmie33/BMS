@@ -159,7 +159,7 @@ BMS::BMS(const Mat& src)
 
 void BMS::computeSaliency(double step)
 {
-	Mat cws = computeCWS(mSrc, 50.0f, 0.1f);
+	Mat mCWSMap = computeCWS(mSrc, 50.0f, 0.1f);
 	//for (int i=0;i<mFeatureMaps.size();++i)
 	//{
 	//	Mat bm;
@@ -181,7 +181,7 @@ void BMS::computeSaliency(double step)
 	normalize(mBMSMap, mBMSMap, 0.0, 1.0, NORM_MINMAX);
 	/*Mat intersection = cws.mul(mSaliencyMap);
 	normalize(intersection, intersection, 0.0, 1.0, NORM_MINMAX);*/
-	mSaliencyMap = mBMSMap + cws;
+	mSaliencyMap = mBMSMap + mCWSMap;
 }
 
 
@@ -492,8 +492,11 @@ void postProcessByRec8u(cv::Mat& salmap, int kernelWidth, double thresh)
 	erode(salmap, temp, Mat(), Point(-1, -1), kernelWidth / 2);
 
 	// do better work with the seed map
-	Mat maskTop = salmap < thresh;
-	temp.setTo(Scalar(0.0), maskTop);
+	if (thresh > 0)
+	{
+		Mat maskTop = salmap < thresh;
+		temp.setTo(Scalar(0.0), maskTop);
+	}
 
 
 	status = ippiRecDilate8uWrapper(salmap, temp, kernelWidth);
@@ -851,4 +854,80 @@ bool removeFrame(const cv::Mat& inImg, cv::Mat& outImg, cv::Rect &roi)
 
 	return true;
 	
+}
+
+
+
+void getTrainData(const cv::Mat& img, const cv::Mat& ref, int nBin, cv::Mat& X, cv::Mat& Y, cv::Mat& W)
+{
+	int histSize[] = {nBin};
+	float range[] = {0,1.0};
+	const float* ranges[] = {range};
+	int channels[] = {0};
+
+	Mat histPos, histNeg;
+	calcHist(&img, 1, channels, ref > 127.0, histPos, 1, histSize, ranges);
+	calcHist(&img, 1, channels, ref <= 127.0, histNeg, 1, histSize, ranges);
+	histPos = histPos / sum(histPos)[0];
+	histNeg = histNeg / sum(histNeg)[0];
+
+	X = Mat::zeros(2*nBin, 1, CV_32FC1);
+	Y = Mat::zeros(2*nBin, 1, CV_32FC1);
+	W = Mat::zeros(2*nBin, 1, CV_32FC1);
+
+	float xStep = 1.0f / nBin;
+	float *pX = (float*)X.data, *pY = (float*)Y.data, *pW = (float*)W.data;
+	for (int i = 0; i < nBin; i++, pX++, pY++, pW++)
+	{
+		*pX = xStep*(i + 0.5f);
+		*pY = 1.0f;
+		*pW = histPos.at<float>(i, 0);
+	}
+	for (int i = 0; i < nBin; i++, pX++, pY++, pW++)
+	{
+		*pX = xStep*(i + 0.5f);
+		*pY = 0.0f;
+		*pW = histNeg.at<float>(i, 0);
+	}
+}
+
+void getLRParam(const cv::Mat& X, const cv::Mat& Y, const cv::Mat& W, float& a, float& b)
+{
+	Mat beta = (Mat_<float>(2,1) << 0.0f, 0.0f), betaOld;
+	Mat temp, err, p, s = Mat::zeros(2, 1, CV_32FC1), J = Mat::zeros(2, 2, CV_32FC1);
+	float lambda = 0.00001f;
+	Mat reg = (Mat_<float>(2,2) << 0.0f, 0.0f, 0.0f, sum(W)[0]*lambda);
+	double diff = 1.0f;
+	int count = 0;
+	while (diff > 0.0001f && count < 10)
+	{
+		betaOld = beta.clone();
+		exp(-(beta.at<float>(1,0)*X + beta.at<float>(0,0)), p);
+		p = 1.0 / (1.0 + p);
+
+		err = Y - p;
+		temp = W.t()*err;
+		s.at<float>(0, 0) = temp.at<float>(0, 0);
+		temp = W.t()*(err.mul(X) - lambda*beta.at<float>(1,0));
+		s.at<float>(1, 0) = temp.at<float>(0, 0);
+
+		err = p.mul(1.0 - p);
+		temp = W.t()*err;
+		J.at<float>(0, 0) = temp.at<float>(0, 0);
+		temp = W.t()*err.mul(X);
+		J.at<float>(0, 1) = temp.at<float>(0, 0);
+		J.at<float>(1, 0) = temp.at<float>(0, 0);
+		temp = W.t()*err.mul(X).mul(X);
+		J.at<float>(1, 1) = temp.at<float>(0, 0);
+
+		J += reg;
+
+		beta = betaOld + J.inv()*s;
+		
+		diff = sum(abs(beta - betaOld))[0];
+		count++;
+	}
+
+	a = beta.at<float>(1,0);
+	b = beta.at<float>(0,0);
 }

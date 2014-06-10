@@ -111,23 +111,31 @@ void doWork(
 		Mat resultRoi=bms.getSaliencyMap(disMat);
 		Mat result = Mat::zeros(src_small.size(), CV_32FC1);
 		/* Post-processing */
-		postProcessByRec8u(resultRoi, postprocess_width, 127.0);
-		normalize(resultRoi, resultRoi, 0.0, 255.0, NORM_MINMAX);
-		Mat resultROI2;
-		resultRoi.convertTo(resultROI2, CV_32FC1);
-		postProcessByRec8u(resultRoi, 2*postprocess_width,127.0);
-		normalize(resultRoi, resultRoi, 0.0, 255.0, NORM_MINMAX);
+		postprocess_width = (int)MAX(floor(sqrt(sum(resultRoi)[0] / (255.0*resultRoi.rows*resultRoi.cols))*MAX_IMG_DIM/6.0),3);
+		//cout << postprocess_width << endl;
+		postProcessByRec8u(resultRoi, postprocess_width, -1.0);
+		//normalize(resultRoi, resultRoi, 0.0, 255.0, NORM_MINMAX);
+		//Mat resultROI2;
+		//resultRoi.convertTo(resultROI2, CV_32FC1);
+		//postProcessByRec8u(resultRoi, 2*postprocess_width,127.0);
+		//normalize(resultRoi, resultRoi, 0.0, 255.0, NORM_MINMAX);
 		resultRoi.convertTo(resultRoi, CV_32FC1);
-		resultRoi += resultROI2;
+		//resultRoi += resultROI2;
 
 		//resultRoi.convertTo(resultRoi, CV_32FC1);
 		normalize(resultRoi, resultRoi, 0.0, 1.0, NORM_MINMAX);
 		Mat bmsMap = bms.getBMSMap();
 		bmsMap.convertTo(bmsMap,CV_8UC1,255.0);
+		/*Mat X, Y, W;
+		float a, b;
+		getTrainData(resultRoi, bmsMap, 10, X, Y, W);
+		getLRParam(X, Y, W, a, b);*/
+
+
 		double mVal1 = mean(resultRoi, bmsMap > 127)[0];
 		double mVal2 = mean(resultRoi, bmsMap <= 127)[0];
 
-		exp(-10*(resultRoi - 0.5*(mVal1+mVal2)), resultRoi);
+		exp(-10*(resultRoi - 0.5*(mVal1 + mVal2)), resultRoi);
 		resultRoi += 1.0;
 		resultRoi = 1.0 / resultRoi;
 

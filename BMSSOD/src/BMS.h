@@ -46,9 +46,11 @@ public:
 	cv::Mat getSaliencyMap();
 	void computeSaliency(double step);
 	cv::Mat getBMSMap() const { return mBMSMap; }
+	cv::Mat getCWSMap() const { return mCWSMap; }
 private:
 	cv::Mat mSaliencyMap;
 	cv::Mat mBMSMap;
+	cv::Mat mCWSMap;
 	int mAttMapCount;
 	cv::Mat mBorderPriorMap;
 	cv::Mat mSrc;
@@ -69,6 +71,9 @@ void postProcessByRec8u(cv::Mat& salmap, int kernelWidth, const cv::Mat& disMat)
 void postProcessByRec(cv::Mat& salmap, int kernelWidth);
 
 void doCluster(const cv::Mat& distMat, double thresh, std::vector<std::vector<int>>& clusters);
+
+void getTrainData(const cv::Mat& img, const cv::Mat& ref, int nBin, cv::Mat& X, cv::Mat& Y, cv::Mat& W);
+void getLRParam(const cv::Mat& X, const cv::Mat& Y, const cv::Mat& W, float& a, float& b);
 
 
 
