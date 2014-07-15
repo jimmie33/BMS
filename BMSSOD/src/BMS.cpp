@@ -159,7 +159,7 @@ BMS::BMS(const Mat& src)
 
 void BMS::computeSaliency(double step)
 {
-	Mat mCWSMap = computeCWS(mSrc, 50.0f, 0.1f);
+	mCWSMap = computeCWS(mSrc, 50.0f, 0.1f);
 	//for (int i=0;i<mFeatureMaps.size();++i)
 	//{
 	//	Mat bm;

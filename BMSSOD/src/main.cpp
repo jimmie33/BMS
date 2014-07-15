@@ -110,6 +110,8 @@ void doWork(
 		
 		Mat resultRoi=bms.getSaliencyMap(disMat);
 		Mat result = Mat::zeros(src_small.size(), CV_32FC1);
+
+
 		/* Post-processing */
 		postprocess_width = (int)MAX(floor(sqrt(sum(resultRoi)[0] / (255.0*resultRoi.rows*resultRoi.cols))*MAX_IMG_DIM/6.0),3);
 		//cout << postprocess_width << endl;
@@ -131,6 +133,13 @@ void doWork(
 		getTrainData(resultRoi, bmsMap, 10, X, Y, W);
 		getLRParam(X, Y, W, a, b);*/
 
+#ifdef IMDEBUG
+		imdebug("lum b=32f w=%d h=%d %p", bms.getCWSMap().cols, bms.getCWSMap().rows, bms.getCWSMap().data);
+		imdebug("lum b=32f w=%d h=%d %p", bms.getBMSMap().cols, bms.getBMSMap().rows, bms.getBMSMap().data);
+		imdebug("lum w=%d h=%d %p", bms.getSaliencyMap().cols, bms.getSaliencyMap().rows, bms.getSaliencyMap().data);
+		imdebug("lum b=32f w=%d h=%d %p", resultRoi.cols, resultRoi.rows, resultRoi.data);
+#endif
+
 
 		double mVal1 = mean(resultRoi, bmsMap > 127)[0];
 		double mVal2 = mean(resultRoi, bmsMap <= 127)[0];
@@ -139,6 +148,9 @@ void doWork(
 		resultRoi += 1.0;
 		resultRoi = 1.0 / resultRoi;
 
+#ifdef IMDEBUG
+		imdebug("lum b=32f w=%d h=%d %p", resultRoi.cols, resultRoi.rows, resultRoi.data);
+#endif
 
 		/*resultRoi.convertTo(resultRoi, CV_32FC1);
 		resultRoi *= 2.0;

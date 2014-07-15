@@ -33,7 +33,9 @@
 #ifdef USE_IPP
 #include <ipp.h>
 #endif
-
+#ifdef IMDEBUG
+#include "imdebug.h"
+#endif
 
 
 static cv::RNG BMS_RNG;
