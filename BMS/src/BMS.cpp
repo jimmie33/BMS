@@ -141,15 +141,27 @@ cv::Mat BMS::getAttentionMap(const cv::Mat& bm, int dilation_width_1, bool toNor
 	//minMaxLoc(ret,&min_,&max_);
 	ret = ret != 1;
 	
-	if(dilation_width_1>0)
-		dilate(ret,ret,Mat(),Point(-1,-1),dilation_width_1);
-	ret.convertTo(ret,CV_32FC1);
+	Mat map1, map2;
+	map1 = ret & bm;
+	map2 = ret & (~bm);
+
+	if (dilation_width_1 > 0)
+	{
+		dilate(map1, map1, Mat(), Point(-1, -1), dilation_width_1);
+		dilate(map2, map2, Mat(), Point(-1, -1), dilation_width_1);
+	}
+		
+	map1.convertTo(map1,CV_32FC1);
+	map2.convertTo(map2,CV_32FC1);
 
 	if (toNormalize)
-		normalize(ret,ret,1.0,0.0,NORM_L2);
+	{
+		normalize(map1, map1, 1.0, 0.0, NORM_L2);
+		normalize(map2, map2, 1.0, 0.0, NORM_L2);
+	}
 	else
 		normalize(ret,ret,0.0,1.0,NORM_MINMAX);
-	return ret;
+	return map1+map2;
 }
 
 Mat BMS::getSaliencyMap()
