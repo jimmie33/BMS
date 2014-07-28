@@ -52,7 +52,8 @@ void doWork(
 	bool use_normalize,
 	bool handle_border,
 	int colorSpace,
-	bool whitening
+	bool whitening,
+	float max_dimension
 	)
 {
 	if (in_path.compare(out_path)==0)
@@ -69,14 +70,18 @@ void doWork(
 		string ext=getExtension(file_list[i]);
 		if (!(ext.compare("jpg")==0 || ext.compare("jpeg")==0 || ext.compare("JPG")==0 || ext.compare("tif")==0 || ext.compare("png")==0 || ext.compare("bmp")==0))
 			continue;
-		cout<<file_list[i]<<"...";
+		//cout<<file_list[i]<<"...";
 
 		/* Preprocessing */
 		Mat src=imread(in_path+file_list[i]);
 		Mat src_small;
 		float w = (float)src.cols, h = (float)src.rows;
 		float maxD = max(w,h);
-		resize(src,src_small,Size((int)(MAX_IMG_DIM*w/maxD),(int)(MAX_IMG_DIM*h/maxD)),0.0,0.0,INTER_AREA);// standard: width: 600 pixel
+		if (max_dimension < 0)
+			resize(src,src_small,Size((int)(MAX_IMG_DIM*w/maxD),(int)(MAX_IMG_DIM*h/maxD)),0.0,0.0,INTER_AREA);// standard: width: 600 pixel
+		else
+			resize(src, src_small, Size((int)(max_dimension*w / maxD), (int)(max_dimension*h / maxD)), 0.0, 0.0, INTER_AREA);
+
 		//GaussianBlur(src_small,src_small,Size(7,7),2,2);// removing noise 1
 		//cvtColor(src_small, src_small, CV_RGB2Lab);
 
@@ -103,18 +108,19 @@ void doWork(
 		ttt=clock()-ttt;
 		float process_time=(float)ttt/CLOCKS_PER_SEC;
 		avg_time+=process_time;
-		cout<<"average_time: "<<avg_time/(i+1)<<endl;
+		//cout<<"average_time: "<<avg_time/(i+1)<<endl;
 
 		/* Save the saliency map*/
 		resize(result,result,src.size());
 		imwrite(out_path+rmExtension(file_list[i])+".png",result);		
 	}
+	cout << "average_time: " << avg_time / file_list.size() << endl;
 }
 
 
 int main(int args, char** argv)
 {
-	if (args != 11)
+	if (args < 11)
 	{
 		cout<<"wrong number of input arguments."<<endl;
 		help();
@@ -137,8 +143,11 @@ int main(int args, char** argv)
 	int COLORSPACE			=	atoi(argv[9]);//
 	bool WHITENING			=	atoi(argv[10]);
 	
+	float MAX_DIM			=	-1.0f;
+	if (args > 11)
+		MAX_DIM = atof(argv[11]);
 
-	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,DILATION_WIDTH_1,DILATION_WIDTH_2,BLUR_STD,NORMALIZE,HANDLE_BORDER, COLORSPACE, WHITENING);
+	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,DILATION_WIDTH_1,DILATION_WIDTH_2,BLUR_STD,NORMALIZE,HANDLE_BORDER, COLORSPACE, WHITENING, MAX_DIM);
 
 	return 0;
 }
