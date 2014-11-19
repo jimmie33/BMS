@@ -79,6 +79,7 @@ void doWork(
 
 	clock_t ttt;
 	double avg_time=0;
+	int count = 0;
 	//#pragma omp parallel for
 	for (int i=0;i<file_list.size();i++)
 	{
@@ -86,7 +87,7 @@ void doWork(
 		string ext=getExtension(file_list[i]);
 		if (!(ext.compare("jpg")==0 || ext.compare("jpeg")==0 || ext.compare("JPG")==0 || ext.compare("tif")==0 || ext.compare("png")==0 || ext.compare("bmp")==0))
 			continue;
-		cout<<file_list[i]<<"...";
+		//cout<<file_list[i]<<"...";
 
 		/* Preprocessing */
 		Mat src=imread(in_path+file_list[i]);
@@ -165,12 +166,13 @@ void doWork(
 		ttt=clock()-ttt;
 		float process_time=(float)ttt/CLOCKS_PER_SEC;
 		avg_time+=process_time;
-		
+		count++;
 
 		/* Save the saliency map*/
 		imwrite(out_path+rmExtension(file_list[i])+".png",result);		
 	}
-	cout << "average_time: " << avg_time / file_list.size() << endl;
+	cout << "average_time: " << (avg_time / count) << endl;
+	//getchar();
 }
 
 

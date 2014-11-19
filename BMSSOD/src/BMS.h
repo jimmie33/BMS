@@ -64,6 +64,7 @@ private:
 
 cv::Mat computeCWS(const cv::Mat src, float reg, float marginRatio);
 cv::Mat fastBMS(const std::vector<cv::Mat> featureMaps);
+cv::Mat fastGeodesic(const std::vector<cv::Mat> featureMaps);
 
 int findFrameMargin(const cv::Mat& img, bool reverse);
 bool removeFrame(const cv::Mat& inImg, cv::Mat& outImg, cv::Rect &roi);

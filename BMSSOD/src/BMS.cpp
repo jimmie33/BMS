@@ -764,6 +764,122 @@ cv::Mat fastBMS(const std::vector<cv::Mat> featureMaps)
 	
 }
 
+void rasterScanGeo(const Mat& featMap, Mat& map)
+{
+	Size sz = featMap.size();
+	float *pMapup = (float*)map.data + 1;
+	float *pMap = pMapup + sz.width;
+	uchar *pFeatup = featMap.data + 1;
+	uchar *pFeat = pFeatup + sz.width;
+
+	float mapPrev;
+	float featPrev;
+
+	float lfV, upV;
+	int flag;
+	for (int r = 1; r < sz.height - 1; r++)
+	{
+		mapPrev = *(pMap - 1);
+		featPrev = *(pFeat - 1);
+
+		for (int c = 1; c < sz.width - 1; c++)
+		{
+			lfV = abs(featPrev - *pFeat) + mapPrev;
+			upV = abs(*pFeatup - *pFeat) + *pMapup;
+			//lfV = MAX(*pFeat, ubPrev) - MIN(*pFeat, lbPrev);//(*pFeat >= lbPrev && *pFeat <= ubPrev) ? mapPrev : mapPrev + abs((float)(*pFeat) - featPrev);
+			//upV = MAX(*pFeat, *pUBup) - MIN(*pFeat, *pLBup);//(*pFeat >= *pLBup && *pFeat <= *pUBup) ? *pMapup : *pMapup + abs((float)(*pFeat) - (float)(*pFeatup));
+
+			if (lfV < *pMap)
+			{
+				*pMap = lfV;
+			}
+			if (upV < *pMap)
+			{
+				*pMap = upV;
+			}
+
+			mapPrev = *pMap;
+			pMap++; pMapup++;
+			featPrev = *pFeat;
+			pFeat++; pFeatup++;
+		}
+		pMapup += 2; pMap += 2;
+		pFeat += 2; pFeatup += 2;
+	}
+}
+
+void invRasterScanGeo(const Mat& featMap, Mat& map)
+{
+	Size sz = featMap.size();
+	int datalen = sz.width*sz.height;
+	float *pMapdn = (float*)map.data + datalen - 2;
+	float *pMap = pMapdn - sz.width;
+	uchar *pFeatdn = featMap.data + datalen - 2;
+	uchar *pFeat = pFeatdn - sz.width;
+
+	float mapPrev;
+	float featPrev;
+
+	float rtV, dnV;
+	int flag;
+	for (int r = 1; r < sz.height - 1; r++)
+	{
+		mapPrev = *(pMap + 1);
+		featPrev = *(pFeat + 1);
+
+		for (int c = 1; c < sz.width - 1; c++)
+		{
+			rtV = abs(featPrev - *pFeat) + mapPrev;
+			dnV = abs(*pFeatdn - *pFeat) + *pMapdn;
+
+			if (rtV < *pMap)
+			{
+				*pMap = rtV;
+			}
+			if (dnV < *pMap)
+			{
+				*pMap = dnV;
+			}
+
+			mapPrev = *pMap;
+			pMap--; pMapdn--;
+			featPrev = *pFeat;
+			pFeat--; pFeatdn--;
+		}
+
+
+		pMapdn -= 2; pMap -= 2;
+		pFeatdn -= 2; pFeat -= 2;
+	}
+}
+
+
+cv::Mat fastGeodesic(const std::vector<cv::Mat> featureMaps)
+{
+	assert(featureMaps[0].type() == CV_8UC1);
+
+	Size sz = featureMaps[0].size();
+	Mat ret = Mat::zeros(sz, CV_32FC1);
+	if (sz.width < 3 || sz.height < 3)
+		return ret;
+
+	for (int i = 0; i < featureMaps.size(); i++)
+	{
+		Mat map = Mat::zeros(sz, CV_32FC1);
+		Mat mapROI(map, Rect(1, 1, sz.width - 2, sz.height - 2));
+		mapROI.setTo(Scalar(100000000));
+
+		rasterScanGeo(featureMaps[i], map);
+		invRasterScanGeo(featureMaps[i], map);
+		rasterScanGeo(featureMaps[i], map);
+
+		ret += map;
+	}
+
+	return ret;
+
+}
+
 int findFrameMargin(const Mat& img, bool reverse)
 {
 	Mat edgeMap, edgeMapDil, edgeMask;
