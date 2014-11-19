@@ -46,7 +46,7 @@ public:
 	BMS (const cv::Mat& src);
 	cv::Mat getSaliencyMap(const cv::Mat& disMat);
 	cv::Mat getSaliencyMap();
-	void computeSaliency(double step);
+	void computeSaliency(bool use_cws);
 	cv::Mat getBMSMap() const { return mBMSMap; }
 	cv::Mat getCWSMap() const { return mCWSMap; }
 private:

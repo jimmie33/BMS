@@ -64,8 +64,7 @@ Mat getDisMap()
 void doWork(
 	const string& in_path,
 	const string& out_path,
-	int sample_step,
-	int postprocess_width
+	bool use_cws
 	)
 {
 	/*namedWindow("debug1");
@@ -79,7 +78,6 @@ void doWork(
 
 	clock_t ttt;
 	double avg_time=0;
-	int count = 0;
 	//#pragma omp parallel for
 	for (int i=0;i<file_list.size();i++)
 	{
@@ -107,32 +105,19 @@ void doWork(
 		
 		/* Computing saliency */
 		BMS bms(srcRoi);
-		bms.computeSaliency((double)sample_step);
+		bms.computeSaliency(use_cws);
 		
 		Mat resultRoi=bms.getSaliencyMap(disMat);
 		Mat result = Mat::zeros(src_small.size(), CV_32FC1);
 
 
 		/* Post-processing */
-		postprocess_width = (int)MAX(floor(sqrt(sum(resultRoi)[0] / (255.0*resultRoi.rows*resultRoi.cols))*MAX_IMG_DIM/6.0),3);
-		//cout << postprocess_width << endl;
+		int postprocess_width = (int)MAX(floor(sqrt(sum(resultRoi)[0] / (255.0*resultRoi.rows*resultRoi.cols))*MAX_IMG_DIM/6.0),3);
 		postProcessByRec8u(resultRoi, postprocess_width, -1.0);
-		//normalize(resultRoi, resultRoi, 0.0, 255.0, NORM_MINMAX);
-		//Mat resultROI2;
-		//resultRoi.convertTo(resultROI2, CV_32FC1);
-		//postProcessByRec8u(resultRoi, 2*postprocess_width,127.0);
-		//normalize(resultRoi, resultRoi, 0.0, 255.0, NORM_MINMAX);
 		resultRoi.convertTo(resultRoi, CV_32FC1);
-		//resultRoi += resultROI2;
-
-		//resultRoi.convertTo(resultRoi, CV_32FC1);
 		normalize(resultRoi, resultRoi, 0.0, 1.0, NORM_MINMAX);
 		Mat bmsMap = bms.getBMSMap();
 		bmsMap.convertTo(bmsMap,CV_8UC1,255.0);
-		/*Mat X, Y, W;
-		float a, b;
-		getTrainData(resultRoi, bmsMap, 10, X, Y, W);
-		getLRParam(X, Y, W, a, b);*/
 
 #ifdef IMDEBUG
 		imdebug("lum b=32f w=%d h=%d %p", bms.getCWSMap().cols, bms.getCWSMap().rows, bms.getCWSMap().data);
@@ -141,11 +126,11 @@ void doWork(
 		imdebug("lum b=32f w=%d h=%d %p", resultRoi.cols, resultRoi.rows, resultRoi.data);
 #endif
 
-
+		
 		double mVal1 = mean(resultRoi, bmsMap > 127)[0];
 		double mVal2 = mean(resultRoi, bmsMap <= 127)[0];
 
-		exp(-10*(resultRoi - 0.5*(mVal1 + mVal2)), resultRoi);
+		exp(-10*(resultRoi - 0.5*(mVal1+mVal2)), resultRoi);
 		resultRoi += 1.0;
 		resultRoi = 1.0 / resultRoi;
 
@@ -153,12 +138,7 @@ void doWork(
 		imdebug("lum b=32f w=%d h=%d %p", resultRoi.cols, resultRoi.rows, resultRoi.data);
 #endif
 
-		/*resultRoi.convertTo(resultRoi, CV_32FC1);
-		resultRoi *= 2.0;
-		resultRoi -= 64.0;
-		resultRoi.convertTo(resultRoi, CV_8UC1);*/
 		normalize(resultRoi, Mat(result, roi), 0.0, 255.0, NORM_MINMAX);
-		//equalizeHist(result, result);
 		result.convertTo(result, CV_8UC1);
 		
 		resize(result, result, src.size());
@@ -166,19 +146,19 @@ void doWork(
 		ttt=clock()-ttt;
 		float process_time=(float)ttt/CLOCKS_PER_SEC;
 		avg_time+=process_time;
-		count++;
+		
 
 		/* Save the saliency map*/
 		imwrite(out_path+rmExtension(file_list[i])+".png",result);		
 	}
-	cout << "average_time: " << (avg_time / count) << endl;
-	//getchar();
+	cout << "average_time: " << avg_time / file_list.size() << endl;
+	getchar();
 }
 
 
 int main(int args, char** argv)
 {
-	if (args != 5)
+	if (args != 4)
 	{
 		cout<<"wrong number of input arguments."<<endl;
 		help();
@@ -188,14 +168,10 @@ int main(int args, char** argv)
 	/* initialize system parameters */
 	string INPUT_PATH		=	argv[1];
 	string OUTPUT_PATH		=	argv[2];
-	int SAMPLE_STEP			=	atoi(argv[3]);//8: delta
-
-	/*Note: we transform the kernel width to the equivalent iteration 
-	number for OpenCV's **dilate** and **erode** functions**/	
-	int POSTPROCESS_WIDTH	=	atoi(argv[4]);//3: omega_d1
+	bool USE_CWS			=	(bool)atoi(argv[3]);
 	
 
-	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,POSTPROCESS_WIDTH);
+	doWork(INPUT_PATH,OUTPUT_PATH, USE_CWS);
 
 	return 0;
 }

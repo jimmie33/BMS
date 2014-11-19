@@ -157,31 +157,19 @@ BMS::BMS(const Mat& src)
 
 }
 
-void BMS::computeSaliency(double step)
+void BMS::computeSaliency(bool use_cws)
 {
-	mCWSMap = computeCWS(mSrc, 50.0f, 0.1f);
-	//for (int i=0;i<mFeatureMaps.size();++i)
-	//{
-	//	Mat bm;
-	//	double max_,min_;
-	//	minMaxLoc(mFeatureMaps[i],&min_,&max_);
-	//	//step = (max_ - min_) / 30.0f;
-	//	for (double thresh = 0; thresh < 255; thresh += step)
-	//	{
-	//		bm=mFeatureMaps[i]>thresh;
-	//		Mat am = getAttentionMap(bm);
-	//		mSaliencyMap += am;
-	//		mAttMapCount++;
-	//		//bm=_feature_maps[i]<=thresh;
-	//		//registerPosition(bm);
-	//	}
-	//}
+
 
 	mBMSMap = fastBMS(mFeatureMaps);
 	normalize(mBMSMap, mBMSMap, 0.0, 1.0, NORM_MINMAX);
-	/*Mat intersection = cws.mul(mSaliencyMap);
-	normalize(intersection, intersection, 0.0, 1.0, NORM_MINMAX);*/
-	mSaliencyMap = mBMSMap + mCWSMap;
+	if (use_cws)
+	{
+		mCWSMap = computeCWS(mSrc, 50.0f, 0.1f);
+		mSaliencyMap = mBMSMap + mCWSMap;
+	}
+	else
+		mSaliencyMap = mBMSMap;
 }
 
 
@@ -764,7 +752,37 @@ cv::Mat fastBMS(const std::vector<cv::Mat> featureMaps)
 	
 }
 
-void rasterScanGeo(const Mat& featMap, Mat& map)
+float getThreshForGeo(const Mat& src)
+{
+	float ret;
+	Size sz = src.size();
+
+	uchar *pFeatup = src.data + 1;
+	uchar *pFeat = pFeatup + sz.width;
+	uchar *pfeatdn = pFeat + sz.width;
+
+	float featPrev;
+
+	for (int r = 1; r < sz.height - 1; r++)
+	{
+		featPrev = *(pFeat - 1);
+
+		for (int c = 1; c < sz.width - 1; c++)
+		{
+			float temp = MIN(abs(*pFeat-featPrev),abs(*pFeat-*(pFeat+1)));
+			temp = MIN(temp,abs(*pFeat-*pFeatup));
+			temp = MIN(temp,abs(*pFeat-*pfeatdn));
+			ret += temp;
+
+			featPrev = *pFeat;
+			pFeat++; pFeatup++; pfeatdn++;
+		}
+		pFeat += 2; pFeatup += 2; pfeatdn += 2;
+	}
+	return ret / ((sz.width - 2)*(sz.height - 2));
+}
+
+void rasterScanGeo(const Mat& featMap, Mat& map, float thresh)
 {
 	Size sz = featMap.size();
 	float *pMapup = (float*)map.data + 1;
@@ -782,13 +800,12 @@ void rasterScanGeo(const Mat& featMap, Mat& map)
 		mapPrev = *(pMap - 1);
 		featPrev = *(pFeat - 1);
 
+
 		for (int c = 1; c < sz.width - 1; c++)
 		{
-			lfV = abs(featPrev - *pFeat) + mapPrev;
-			upV = abs(*pFeatup - *pFeat) + *pMapup;
-			//lfV = MAX(*pFeat, ubPrev) - MIN(*pFeat, lbPrev);//(*pFeat >= lbPrev && *pFeat <= ubPrev) ? mapPrev : mapPrev + abs((float)(*pFeat) - featPrev);
-			//upV = MAX(*pFeat, *pUBup) - MIN(*pFeat, *pLBup);//(*pFeat >= *pLBup && *pFeat <= *pUBup) ? *pMapup : *pMapup + abs((float)(*pFeat) - (float)(*pFeatup));
-
+			lfV = (abs(featPrev - *pFeat)>thresh ? abs(featPrev - *pFeat):0.0f) + mapPrev;
+			upV = (abs(*pFeatup - *pFeat)>thresh ? abs(*pFeatup - *pFeat):0.0f) + *pMapup;
+			
 			if (lfV < *pMap)
 			{
 				*pMap = lfV;
@@ -808,7 +825,7 @@ void rasterScanGeo(const Mat& featMap, Mat& map)
 	}
 }
 
-void invRasterScanGeo(const Mat& featMap, Mat& map)
+void invRasterScanGeo(const Mat& featMap, Mat& map, float thresh)
 {
 	Size sz = featMap.size();
 	int datalen = sz.width*sz.height;
@@ -829,9 +846,9 @@ void invRasterScanGeo(const Mat& featMap, Mat& map)
 
 		for (int c = 1; c < sz.width - 1; c++)
 		{
-			rtV = abs(featPrev - *pFeat) + mapPrev;
-			dnV = abs(*pFeatdn - *pFeat) + *pMapdn;
-
+			rtV = (abs(featPrev - *pFeat)>thresh ? abs(featPrev - *pFeat):0.0f) + mapPrev;
+			dnV = (abs(*pFeatdn - *pFeat)>thresh ? abs(*pFeatdn - *pFeat):0.0f) + *pMapdn;
+			
 			if (rtV < *pMap)
 			{
 				*pMap = rtV;
@@ -853,7 +870,6 @@ void invRasterScanGeo(const Mat& featMap, Mat& map)
 	}
 }
 
-
 cv::Mat fastGeodesic(const std::vector<cv::Mat> featureMaps)
 {
 	assert(featureMaps[0].type() == CV_8UC1);
@@ -863,15 +879,18 @@ cv::Mat fastGeodesic(const std::vector<cv::Mat> featureMaps)
 	if (sz.width < 3 || sz.height < 3)
 		return ret;
 
+
 	for (int i = 0; i < featureMaps.size(); i++)
 	{
+		float thresh = getThreshForGeo(featureMaps[i]);
+		//cout << thresh << endl;
 		Mat map = Mat::zeros(sz, CV_32FC1);
 		Mat mapROI(map, Rect(1, 1, sz.width - 2, sz.height - 2));
-		mapROI.setTo(Scalar(100000000));
+		mapROI.setTo(Scalar(1000000000));
 
-		rasterScanGeo(featureMaps[i], map);
-		invRasterScanGeo(featureMaps[i], map);
-		rasterScanGeo(featureMaps[i], map);
+		rasterScanGeo(featureMaps[i], map, thresh);
+		invRasterScanGeo(featureMaps[i], map, thresh);
+		rasterScanGeo(featureMaps[i], map, thresh);
 
 		ret += map;
 	}

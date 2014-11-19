@@ -1,9 +1,9 @@
 /*****************************************************************************
 *	Implemetation of the saliency detction method described in paper
-*	"Saliency Detection: A Boolean Map Approach", Jianming Zhang, 
-*	Stan Sclaroff, ICCV, 2013
+*	"Exploit Surroundedness for Saliency Detection: A Boolean Map Approach", 
+*   Jianming Zhang, Stan Sclaroff, submitted to PAMI, 2014
 *	
-*	Copyright (C) 2013 Jianming Zhang
+*	Copyright (C) 2014 Jianming Zhang
 *
 *	This program is free software: you can redistribute it and/or modify
 *	it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ using namespace std;
 void help()
 {
 	cout<<"Usage: \n"
-		<<"BMS <input_path> <output_path> <step_size> <dilation_width1> <dilation_width2> <blurring_std> <use_normalization> <handle_border>\n"
+		<<"BMS <input_path> <output_path> <step_size> <dilation_width1> <dilation_width2> <blurring_std> <color_space> <whitening> <max_dim>\n"
 		<<"Press ENTER to continue ..."<<endl;
 	getchar();
 }
@@ -82,8 +82,6 @@ void doWork(
 		else
 			resize(src, src_small, Size((int)(max_dimension*w / maxD), (int)(max_dimension*h / maxD)), 0.0, 0.0, INTER_AREA);
 
-		//GaussianBlur(src_small,src_small,Size(7,7),2,2);// removing noise 1
-		//cvtColor(src_small, src_small, CV_RGB2Lab);
 
 		/* Computing saliency */
 		ttt=clock();
@@ -120,7 +118,7 @@ void doWork(
 
 int main(int args, char** argv)
 {
-	if (args < 11)
+	if (args < 9)
 	{
 		cout<<"wrong number of input arguments."<<endl;
 		help();
@@ -138,14 +136,14 @@ int main(int args, char** argv)
 	int DILATION_WIDTH_2	=	(atoi(argv[5])-1)/2;//11: omega_d2
 
 	float BLUR_STD			=	(float)atof(argv[6]);//20: sigma	
-	bool NORMALIZE			=	atoi(argv[7]);//1: whether to use L2-normalization
-	bool HANDLE_BORDER		=	atoi(argv[8]);//0: to handle the images with artificial frames
-	int COLORSPACE			=	atoi(argv[9]);//
-	bool WHITENING			=	atoi(argv[10]);
+	bool NORMALIZE			=	1 /*atoi(argv[7])*/;//1: whether to use L2-normalization
+	bool HANDLE_BORDER		=	0 /*atoi(argv[8])*/;//0: to handle the images with artificial frames
+	int COLORSPACE			=	atoi(argv[7]);//
+	bool WHITENING			=	atoi(argv[8]);
 	
 	float MAX_DIM			=	-1.0f;
-	if (args > 11)
-		MAX_DIM = atof(argv[11]);
+	if (args > 9)
+		MAX_DIM				=	(float)atof(argv[11]);
 
 	doWork(INPUT_PATH,OUTPUT_PATH,SAMPLE_STEP,DILATION_WIDTH_1,DILATION_WIDTH_2,BLUR_STD,NORMALIZE,HANDLE_BORDER, COLORSPACE, WHITENING, MAX_DIM);
 

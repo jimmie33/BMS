@@ -1,9 +1,9 @@
 /*****************************************************************************
 *	Implemetation of the saliency detction method described in paper
-*	"Saliency Detection: A Boolean Map Approach", Jianming Zhang, 
-*	Stan Sclaroff, ICCV, 2013
-*	
-*	Copyright (C) 2013 Jianming Zhang
+*	"Exploit Surroundedness for Saliency Detection: A Boolean Map Approach",
+*   Jianming Zhang, Stan Sclaroff, submitted to PAMI, 2014
+*
+*	Copyright (C) 2014 Jianming Zhang
 *
 *	This program is free software: you can redistribute it and/or modify
 *	it under the terms of the GNU General Public License as published by
@@ -30,9 +30,6 @@
 #include <fstream>
 #include <vector>
 #include <opencv2/opencv.hpp>
-#ifdef USE_IPP
-#include <ipp.h>
-#endif
 
 static const int CL_RGB = 1;
 static const int CL_Lab = 2;
