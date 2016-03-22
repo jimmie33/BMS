@@ -36,7 +36,9 @@ using namespace std;
 void help()
 {
 	cout<<"Usage: \n"
-		<<"BMSSOD <input_path> <output_path> <step_size> <postprocess_width>\n"
+		<<"MBS <input_path> <output_path> <use_color_whitening>\n"
+		<< "example:\n"
+		<< "MBS your/input/image/ your/output/image/ 1\n"
 		<<"Press ENTER to continue ..."<<endl;
 	getchar();
 }
@@ -79,13 +81,14 @@ void doWork(
 	clock_t ttt;
 	double avg_time=0;
 	//#pragma omp parallel for
+	int img_count = 0;
 	for (int i=0;i<file_list.size();i++)
 	{
 		/* get file name */
 		string ext=getExtension(file_list[i]);
 		if (!(ext.compare("jpg")==0 || ext.compare("jpeg")==0 || ext.compare("JPG")==0 || ext.compare("tif")==0 || ext.compare("png")==0 || ext.compare("bmp")==0))
 			continue;
-		//cout<<file_list[i]<<"...";
+		cout<<file_list[i]<<"..."<<endl;
 
 		/* Preprocessing */
 		Mat src=imread(in_path+file_list[i]);
@@ -143,15 +146,19 @@ void doWork(
 		
 		resize(result, result, src.size());
 
+		img_count++;
 		ttt=clock()-ttt;
 		float process_time=(float)ttt/CLOCKS_PER_SEC;
 		avg_time+=process_time;
 		
 
 		/* Save the saliency map*/
-		imwrite(out_path+rmExtension(file_list[i])+".png",result);		
+		if (use_cws)
+			imwrite(out_path+rmExtension(file_list[i])+"_MB+.png",result);		
+		else
+			imwrite(out_path + rmExtension(file_list[i]) + "_MB.png", result);
 	}
-	cout << "average_time: " << avg_time / file_list.size() << endl;
+	cout << "average_time: " << avg_time / img_count << endl;
 	getchar();
 }
 
